@@ -9,8 +9,10 @@ from typing import Any
 
 import numpy as np
 import pdfplumber
+from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import Normalizer
 
 from src.config import DATA_DIR
 from src.database import normalize_text
@@ -283,27 +285,51 @@ class PolicyRAG:
         self.chunks = raw_sections
 
     def _build_index(self) -> None:
-        """Constrói índice híbrido TF-IDF de palavras e n-gramas de caracteres."""
+        """Constrói índice tri-modal: TF-IDF lexical, Char N-Grams e Embeddings Semânticos Densos (LSA/SVD)."""
         corpus = [
             normalize_text(f"{c.title} {' '.join(c.keywords)} {c.content}") for c in self.chunks
         ]
-        self.word_vectorizer = TfidfVectorizer(ngram_range=(1, 2))
-        self.char_vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5))
+        self.word_vectorizer = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True)
+        self.char_vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True)
         self.word_matrix = self.word_vectorizer.fit_transform(corpus)
         self.char_matrix = self.char_vectorizer.fit_transform(corpus)
 
+        # Vetores densos semânticos (Latent Semantic Analysis / TruncatedSVD L2-normalizado)
+        n_components = max(2, min(8, len(corpus) - 1, self.word_matrix.shape[1] - 1))
+        self.svd = TruncatedSVD(n_components=n_components, random_state=42)
+        self.normalizer = Normalizer(copy=False)
+        self.dense_matrix = self.normalizer.fit_transform(self.svd.fit_transform(self.word_matrix))
+
+    @staticmethod
+    def _compute_rrf(score_arrays: list[np.ndarray], k: int = 10) -> np.ndarray:
+        """Calcula Reciprocal Rank Fusion (RRF) combinando múltiplos rankings de busca."""
+        n_docs = len(score_arrays[0])
+        rrf_scores = np.zeros(n_docs, dtype=float)
+        for scores in score_arrays:
+            # Ordem decrescente de score -> rank 1, 2, ..., n_docs
+            order = np.argsort(scores)[::-1]
+            ranks = np.empty_like(order)
+            ranks[order] = np.arange(1, n_docs + 1)
+            rrf_scores += 1.0 / (k + ranks)
+        return rrf_scores
+
     def search(self, query: str, top_k: int = 3) -> list[dict[str, Any]]:
-        """Busca as seções mais relevantes do PDF combinando TF-IDF e boost semântico."""
+        """Busca as seções mais relevantes combinando Lexical, Char N-Grams e Embeddings Densos via RRF."""
         q_norm = normalize_text(query)
         if not q_norm:
             return []
 
         w_vec = self.word_vectorizer.transform([q_norm])
         c_vec = self.char_vectorizer.transform([q_norm])
+        d_vec = self.normalizer.transform(self.svd.transform(w_vec))
 
         w_scores = cosine_similarity(w_vec, self.word_matrix).flatten()
         c_scores = cosine_similarity(c_vec, self.char_matrix).flatten()
-        combined = 0.65 * w_scores + 0.35 * c_scores
+        d_scores = cosine_similarity(d_vec, self.dense_matrix).flatten()
+
+        # Combinação linear + Reciprocal Rank Fusion (RRF)
+        rrf_scores = self._compute_rrf([w_scores, c_scores, d_scores], k=10)
+        combined = 0.45 * w_scores + 0.25 * c_scores + 0.20 * np.clip(d_scores, 0, None) + 0.30 * rrf_scores
 
         # Boost por palavras-chave de domínio mapeadas para cada seção
         for idx, chunk in enumerate(self.chunks):
@@ -324,6 +350,8 @@ class PolicyRAG:
                     "title": chunk.title,
                     "pages": chunk.page_numbers,
                     "score": round(score, 4),
+                    "rrf_score": round(float(rrf_scores[int(idx)]), 4),
+                    "dense_similarity": round(float(d_scores[int(idx)]), 4),
                     "content": chunk.content,
                 }
             )
