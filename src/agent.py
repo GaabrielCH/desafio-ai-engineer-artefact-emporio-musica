@@ -403,32 +403,57 @@ class EmporioMusicaAgent:
             )
 
         # 4. Intenção: Detalhamento de Produto Específico (ex.: "Quanto custa o Takamine GD20?", "E o Giannini GF-3D?")
-        specific_models = self._extract_specific_models(q_norm, history)
+        specific_models = self._extract_specific_models(
+            q_norm, history, allow_coref=not (order_identifier or wants_order_status)
+        )
         for model_name in specific_models:
             prod_detail = call_tool("detalhar_produto_e_pagamento", {"nome_ou_id_produto": model_name})
             sections_reply.append(self._format_product_detail_response(prod_detail, q_norm))
 
-        # 5. Intenção: Busca de Catálogo com Filtros (ex.: "Quais opções de violões disponíveis custando até R$1000?")
-        catalog_filters = self._extract_catalog_search_filters(q_norm) if not matched_acc else None
+        # 5. Intenção: Frete e Prazos de Entrega por Cidade
+        freight_queries = self._extract_freight_queries(q_norm)
+
+        # 6. Intenção: Busca de Catálogo com Filtros (ex.: "Quais opções de violões disponíveis custando até R$1000?")
+        is_pure_freight_question = bool(freight_queries) and not any(
+            w in q_norm for w in ["quais", "opcoes", "catalogo", "modelos", "tem violao", "tem guitarra"]
+        )
+        catalog_filters = (
+            self._extract_catalog_search_filters(q_norm)
+            if (not matched_acc and not is_pure_freight_question)
+            else None
+        )
         if catalog_filters and not specific_models:
             search_res = call_tool("buscar_produtos", catalog_filters)
             sections_reply.append(self._format_catalog_search_response(search_res, catalog_filters))
 
-        # 6. Intenção: Promoções e Descontos Gerais
-        wants_promos = any(
+        # 7. Intenção: Promoções e Descontos Gerais
+        wants_promos_list = any(
             kw in q_norm
-            for kw in ["promocao", "promocoes", "desconto", "oferta", "ofertas", "black friday", "liquidacao", "queima de estoque"]
+            for kw in [
+                "quais instrumentos estao em promocao",
+                "quais promocoes",
+                "promocoes ativas",
+                "promocao ativa hoje",
+                "o que tem em promocao",
+                "ofertas ativas",
+                "lista de promocoes",
+            ]
+        ) or (
+            any(
+                kw in q_norm
+                for kw in ["promocao", "promocoes", "desconto", "oferta", "ofertas", "black friday", "liquidacao", "queima de estoque"]
+            )
+            and not specific_models
+            and not catalog_filters
         )
-        if wants_promos and not specific_models and not catalog_filters:
+        if wants_promos_list:
             include_exp = any(k in q_norm for k in ["black friday", "inverno", "pascoa", "aniversario", "semana do musico", "expirada"])
             promo_res = call_tool("listar_promocoes", {"incluir_expiradas": include_exp})
             call_tool("consultar_politicas_loja", {"pergunta": "regras de promoções e descontos cumulatividade pix"})
             sections_reply.append(self._format_promotions_response(promo_res, q_norm))
 
-        # 7. Intenção: Frete e Prazos de Entrega por Cidade
-        freight_info = self._extract_freight_query(q_norm)
-        if freight_info:
-            f_res = call_tool("calcular_frete_e_entrega", freight_info)
+        for f_info in freight_queries:
+            f_res = call_tool("calcular_frete_e_entrega", f_info)
             sections_reply.append(self._format_freight_response(f_res))
 
         # 8. Intenção: Informações Gerais da Loja (Endereço, Horário, Contatos, Formas de Pagamento, LGPD)
@@ -472,7 +497,7 @@ class EmporioMusicaAgent:
         self, user_message: str, history: list[dict[str, Any]]
     ) -> str | None:
         patterns = [
-            r"(?:meu nome e|sou o|sou a|aqui e o|aqui e a|me chamo)\s+([A-ZÀ-Úa-zà-ú]+)",
+            r"(?:meu nome [eé]|sou [oa]|aqui [eé] [oa]|me chamo)\s+([A-ZÀ-Úa-zà-ú]+)",
         ]
         for text in [user_message] + [h["content"] for h in reversed(history) if h["role"] == "user"]:
             for pat in patterns:
@@ -547,7 +572,7 @@ class EmporioMusicaAgent:
         return None
 
     def _extract_specific_models(
-        self, q_norm: str, history: list[dict[str, Any]]
+        self, q_norm: str, history: list[dict[str, Any]], allow_coref: bool = True
     ) -> list[str]:
         found: list[str] = []
         for model in self.KNOWN_MODELS:
@@ -604,7 +629,7 @@ class EmporioMusicaAgent:
                     found.append(full_name)
 
         # Resolução de correferência ("e se eu pagar no pix?", "como fica o parcelamento dele?", "ele está em promoção?")
-        if not found and any(
+        if allow_coref and not found and any(
             pron in q_norm
             for pron in ["dele", "desse modelo", "esse violao", "esse instrumento", "no pix", "parcelar ele", "promocao dele"]
         ):
@@ -692,9 +717,9 @@ class EmporioMusicaAgent:
             "apenas_disponiveis": apenas_disp,
         }
 
-    def _extract_freight_query(self, q_norm: str) -> dict[str, Any] | None:
+    def _extract_freight_queries(self, q_norm: str) -> list[dict[str, Any]]:
         if not any(w in q_norm for w in ["frete", "entrega", "entregam", "envio", "enviar", "motoboy", "sedex", "pac", "jadlog"]):
-            return None
+            return []
         cities = [
             "Campo Grande",
             "Dourados",
@@ -706,19 +731,20 @@ class EmporioMusicaAgent:
             "Cuiabá",
             "Brasília",
         ]
-        chosen_city = "Campo Grande"
-        for c in cities:
-            if normalize_text(c) in q_norm:
-                chosen_city = c
-                break
+        matched_cities = [c for c in cities if normalize_text(c) in q_norm]
+        if not matched_cities:
+            matched_cities = ["Campo Grande"]
         m_val = re.search(r"r\$\s*(\d{1,3}(?:\.\d{3})+|\d+)", q_norm)
         val = float(m_val.group(1).replace(".", "")) if m_val else None
         grande = any(g in q_norm for g in ["bateria", "piano", "contrabaixo", "baixo"])
-        return {
-            "cidade": chosen_city,
-            "valor_pedido_brl": val,
-            "instrumento_grande_porte": grande,
-        }
+        return [
+            {
+                "cidade": c,
+                "valor_pedido_brl": val,
+                "instrumento_grande_porte": grande,
+            }
+            for c in matched_cities
+        ]
 
     def _extract_general_policy_topics(self, q_norm: str) -> str | None:
         topics: list[str] = []
