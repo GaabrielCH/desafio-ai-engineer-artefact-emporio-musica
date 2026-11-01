@@ -215,7 +215,8 @@ class PolicyRAG:
                 if line.strip():
                     combined_lines.append((page_num, line.strip()))
 
-        section_pattern = re.compile(r"^(\d{1,2})\.\s+([A-ZÀ-Ú].+)$")
+        # Top-level sections in the PDF never contain ':' (unlike '1. Saudação: ...' in section 7.2)
+        section_pattern = re.compile(r"^(\d{1,2})\.\s+([A-ZÀ-Ú][^:]+)$")
         current_sec_id = "0"
         current_title = "Capa e Identificação da Loja"
         current_lines: list[str] = []
