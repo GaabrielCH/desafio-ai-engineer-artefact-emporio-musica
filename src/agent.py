@@ -382,13 +382,39 @@ class EmporioMusicaAgent:
 
         if order_identifier and (wants_order_status or wants_return_or_exchange or order_identifier.startswith("id:")):
             clean_ident = order_identifier.removeprefix("id:")
-            ord_res = call_tool("consultar_pedido", {"identificador": clean_ident})
+            verif_factor = self._extract_customer_verification_factor(user_message, history)
+            ord_args: dict[str, Any] = {"identificador": clean_ident}
+            if verif_factor and clean_ident.isdigit():
+                ord_args["verificacao_cliente"] = verif_factor
+            ord_res = call_tool("consultar_pedido", ord_args)
+
+            ticket_res: dict[str, Any] | None = None
             if wants_return_or_exchange:
                 call_tool(
                     "consultar_politicas_loja",
                     {"pergunta": "política de trocas e devoluções direito de arrependimento defeito garantia"},
                 )
-            sections_reply.append(self._format_order_response(ord_res, wants_return_or_exchange, q_norm))
+                # Se o pedido está elegível e o cliente pediu devolução/troca, registra a solicitação e gera logística reversa
+                if ord_res.get("encontrado") and ord_res.get("pedidos"):
+                    first_ped = ord_res["pedidos"][0]
+                    analise = first_ped.get("analise_troca_e_devolucao", {})
+                    arr_ok = analise.get("direito_arrependimento_7_dias", {}).get("elegivel_na_data_referencia")
+                    def_ok = analise.get("troca_por_defeito_30_dias_loja", {}).get("elegivel_na_data_referencia")
+                    if first_ped.get("status_codigo") == "delivered" and (arr_ok or def_ok):
+                        tipo_sol = "troca_por_defeito" if "defeito" in q_norm else "devolucao_arrependimento"
+                        ticket_res = call_tool(
+                            "registrar_solicitacao_troca_devolucao",
+                            {
+                                "order_id": int(first_ped["order_id"]),
+                                "tipo_solicitacao": tipo_sol,
+                                "motivo": user_message,
+                                "verificacao_cliente": verif_factor or first_ped["cliente"]["nome"],
+                            },
+                        )
+
+            sections_reply.append(
+                self._format_order_response(ord_res, wants_return_or_exchange, q_norm, ticket_res=ticket_res)
+            )
         elif wants_return_or_exchange:
             # Pergunta sobre troca/devolução/arrependimento sem número de pedido ainda
             pol_res = call_tool(
@@ -400,6 +426,27 @@ class EmporioMusicaAgent:
             sections_reply.append(
                 "Para eu consultar o status certinho do seu pedido em tempo real, você pode me informar o "
                 "**número do pedido** (ex.: `#7`), o seu **nome completo**, **e-mail** ou o **código de rastreamento**?"
+            )
+
+        # 3b. Intenção: Abertura de Chamado de Reclamação / Ouvidoria (Seção 7.3 — SLA 24h úteis)
+        if any(kw in q_norm for kw in ["reclamacao", "reclamar", "abrir chamado", "ouvidoria", "insatisfeito"]):
+            cli_ident = customer_first_name or order_identifier or "Cliente via WhatsApp"
+            oid_num = int(order_identifier.removeprefix("id:")) if (order_identifier and order_identifier.removeprefix("id:").isdigit()) else None
+            sac_res = call_tool(
+                "abrir_chamado_reclamacao",
+                {
+                    "identificador_cliente": str(cli_ident),
+                    "descricao_reclamacao": user_message,
+                    "order_id": oid_num,
+                },
+            )
+            sections_reply.append(
+                f"### 📋 Registro de Reclamação / Atendimento Prioritário (`{sac_res['protocolo']}`)\n"
+                f"Sinto muito pelo transtorno! Seguindo nossa diretriz da **Seção 7.3 do Manual**, "
+                f"registrei imediatamente sua manifestação e encaminhei ao responsável:\n"
+                f"- **Protocolo:** `{sac_res['protocolo']}`\n"
+                f"- **Setor Responsável:** {sac_res['encaminhado_para']}\n"
+                f"- **Prazo máximo de retorno (SLA):** **{sac_res['prazo_retorno_sla']}**"
             )
 
         # 4. Intenção: Detalhamento de Produto Específico (ex.: "Quanto custa o Takamine GD20?", "E o Giannini GF-3D?")
@@ -507,6 +554,21 @@ class EmporioMusicaAgent:
                     if candidate.lower() not in {"cliente", "musico", "comprador"} and len(candidate) > 2:
                         return candidate.capitalize()
         return None
+
+    def _extract_customer_verification_factor(
+        self, user_message: str, history: list[dict[str, Any]]
+    ) -> str | None:
+        """Extrai 2º fator de verificação (nome completo, e-mail ou telefone) na mensagem ou histórico."""
+        customer_rows = self.toolkit.db.execute_query("SELECT name, name_norm, email_norm FROM customers")
+        for text in [user_message] + [h["content"] for h in reversed(history) if h["role"] == "user"]:
+            t_norm = normalize_text(text)
+            for c in customer_rows:
+                parts = c["name_norm"].split()
+                if c["name_norm"] in t_norm or (len(parts) >= 2 and f"{parts[0]} {parts[1]}" in t_norm):
+                    return c["name"]
+                if c["email_norm"] and c["email_norm"] in text.lower():
+                    return c["email_norm"]
+        return self._extract_customer_greeting_name(user_message, history)
 
     def _is_off_topic(self, q_norm: str) -> bool:
         if any(kw in q_norm for kw in self.OFF_TOPIC_KEYWORDS):
@@ -920,7 +982,11 @@ class EmporioMusicaAgent:
         return "\n".join(lines)
 
     def _format_order_response(
-        self, ord_res: dict[str, Any], wants_return_or_exchange: bool, q_norm: str
+        self,
+        ord_res: dict[str, Any],
+        wants_return_or_exchange: bool,
+        q_norm: str,
+        ticket_res: dict[str, Any] | None = None,
     ) -> str:
         if not ord_res.get("encontrado"):
             return ord_res.get("mensagem", "Pedido não encontrado.")
@@ -937,12 +1003,15 @@ class EmporioMusicaAgent:
         for ped in ord_res["pedidos"]:
             cli = ped["cliente"]
             itens_str = ", ".join(
-                f"{it['quantidade']}x **{it['produto']}** (R$ {it['preco_catalogo_brl']:,.2f})".replace(",", "X").replace(".", ",").replace("X", ".")
+                f"{it['quantidade']}x **{it['produto']}** (R$ {it['preco_catalogo_brl']:,.2f})".replace(",", "_").replace(".", ",").replace("_", ".")
                 for it in ped["itens"]
             )
-            total_str = f"R$ {ped['valor_total_brl']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            total_str = f"R$ {ped['valor_total_brl']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
             lines.append(f"### 📦 Pedido `#{ped['order_id']}` — Cliente: **{cli['nome']}** ({cli['cidade']})")
+            lines.append(
+                f"- **Contato registrado (LGPD):** `{cli['email']}` | `{cli['telefone']}` *(Status de verificação: `{ped.get('verificacao_lgpd', 'verificado')}`)*"
+            )
             lines.append(f"- **Data da compra:** `{ped['data_pedido']}`")
             lines.append(f"- **Status atual:** **{ped['status_descricao']}** (`{ped['status_codigo']}`)")
             lines.append(f"- **Itens do pedido:** {itens_str}")
@@ -992,6 +1061,14 @@ class EmporioMusicaAgent:
                 else:
                     lines.append(f"- {analise.get('orientacao', '')}")
 
+                if ticket_res and ticket_res.get("sucesso"):
+                    lines.append(
+                        f"\n#### 🎫 Solicitação e Logística Reversa Emitidas Automaticamente:\n"
+                        f"- **Protocolo de Atendimento:** `{ticket_res['protocolo']}`\n"
+                        f"- **Código de Autorização de Postagem Reversa (Frete Grátis):** `{ticket_res['codigo_autorizacao_postagem_reversa']}`\n"
+                        f"- **Instruções:** {ticket_res['instrucoes_cliente']}"
+                    )
+
         return "\n".join(lines)
 
     def _format_return_policy_response(self, q_norm: str, pol_res: dict[str, Any]) -> str:
@@ -1038,18 +1115,31 @@ class EmporioMusicaAgent:
 
     def _format_freight_response(self, f_res: dict[str, Any]) -> str:
         lines: list[str] = [f"### 🚚 Frete e Prazos de Entrega — {f_res['cidade_informada']}"]
+        peso_info = (
+            f" | Peso/Cubagem estimada: `{f_res.get('peso_estimado_kg')} kg` (`{f_res.get('dimensoes_embalagem')}`)"
+            if f_res.get("peso_estimado_kg")
+            else ""
+        )
         if "Motoboy" in str(f_res.get("modalidade", "")):
-            lines.append(f"- **Região:** {f_res['regiao']}")
-            lines.append("- **Frete Grátis:** Para todos os pedidos **acima de R$ 500,00**!")
-            lines.append("- **Pedidos abaixo de R$ 500,00:** Taxa fixa de **R$ 35,00**.")
+            lines.append(f"- **Região:** {f_res['regiao']}{peso_info}")
+            if f_res.get("frete_gratis"):
+                lines.append("- **Custo do Frete:** ✅ **GRÁTIS (R$ 0,00)** — pedido acima de R$ 500,00!")
+            else:
+                lines.append("- **Frete Grátis:** Para todos os pedidos **acima de R$ 500,00**!")
+                lines.append("- **Pedidos abaixo de R$ 500,00:** Taxa fixa de **R$ 35,00**.")
             lines.append(f"- **Prazo de entrega:** **{f_res['prazo_entrega']}** via **motoboy próprio** (nossa equipe entra em contato por telefone antes da entrega).")
         else:
-            lines.append(f"- **Região:** {f_res['regiao']}")
+            lines.append(f"- **Região:** {f_res['regiao']}{peso_info}")
             lines.append(f"- **Cálculo do frete:** {f_res['calculo_valor']}")
-            lines.append("- **Modalidades e Prazos Estimados:**")
+            lines.append("- **Modalidades, Valores e Prazos Estimados:**")
             for mod in f_res.get("modalidades_disponiveis", []):
+                val_str = (
+                    f" — **R$ {mod['valor_estimado_brl']:,.2f}**".replace(",", "_").replace(".", ",").replace("_", ".")
+                    if mod.get("valor_estimado_brl") is not None
+                    else ""
+                )
                 lines.append(
-                    f"  - **{mod['modalidade']}:** {mod['prazo_estimado']} (Rastreamento + Seguro contra extravio/avaria inclusos)"
+                    f"  - **{mod['modalidade']}:** {mod['prazo_estimado']}{val_str} *(Rastreamento + Seguro inclusos)*"
                 )
             lines.append(f"- *{f_res['alerta_grande_porte']}*")
         return "\n".join(lines)

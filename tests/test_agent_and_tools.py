@@ -112,3 +112,59 @@ def test_agent_end_to_end_conversations() -> None:
     r4 = agent.chat("Qual a receita de bolo de cenoura?", session_id="s1")
     assert len(r4.tool_calls) == 0
     assert "Empório da Música" in r4.reply
+
+
+def test_lgpd_verification_and_pii_masking() -> None:
+    tk = AgentToolkit(reference_date=date(2026, 2, 20))
+
+    # Sem segundo fator: e-mail e telefone devem vir mascarados (LGPD Seção 9)
+    unverified = tk.consultar_pedido("7")
+    cli_unv = unverified["pedidos"][0]["cliente"]
+    assert "***" in cli_unv["email"]
+    assert "*****" in cli_unv["telefone"]
+    assert "parcial_pii_mascarado" in unverified["pedidos"][0]["verificacao_lgpd"]
+
+    # Com segundo fator (nome da titular Letícia Gonçalves Rocha): dados desbloqueados
+    verified = tk.consultar_pedido("7", verificacao_cliente="Letícia Gonçalves Rocha")
+    cli_ver = verified["pedidos"][0]["cliente"]
+    assert cli_ver["email"] == "leticia.rocha@jmail.com"
+    assert verified["pedidos"][0]["verificacao_lgpd"] == "verificado_2_fatores"
+
+
+def test_shipping_calculator_weights_and_tariffs() -> None:
+    tk = AgentToolkit()
+    # Campo Grande acima de R$ 500 -> Frete grátis (R$ 0,00)
+    cg = tk.calcular_frete_e_entrega("Campo Grande", valor_pedido_brl=600.0)
+    assert cg["frete_gratis"] is True
+    assert cg["custo_frete_brl"] == 0.0
+
+    # Dourados (Interior MS) -> Calcula tarifas estimadas para PAC, Jadlog e SEDEX
+    dourados = tk.calcular_frete_e_entrega("Dourados", valor_pedido_brl=600.0, categoria_instrumento="Violões")
+    assert dourados["peso_estimado_kg"] == 3.2
+    mods = {m["modalidade"]: m["valor_estimado_brl"] for m in dourados["modalidades_disponiveis"]}
+    assert mods["PAC (Correios)"] < mods["Jadlog (.package)"] < mods["SEDEX (Correios)"]
+
+
+def test_reverse_logistics_and_complaint_tickets() -> None:
+    tk = AgentToolkit(reference_date=date(2026, 2, 20))
+
+    # Registrar devolução por arrependimento para o Pedido #7 (elegível em 2026-02-20)
+    ret = tk.registrar_solicitacao_troca_devolucao(
+        order_id=7,
+        tipo_solicitacao="devolucao_arrependimento",
+        motivo="Me arrependi da compra",
+        verificacao_cliente="Letícia Gonçalves Rocha",
+    )
+    assert ret["sucesso"] is True
+    assert ret["protocolo"] == "TROCA-2026-0007"
+    assert ret["codigo_autorizacao_postagem_reversa"].startswith("LOG-REV-BR")
+
+    # Abrir chamado de reclamação com SLA de 24h úteis (Seção 7.3)
+    sac = tk.abrir_chamado_reclamacao(
+        identificador_cliente="Pedro Henrique Oliveira",
+        descricao_reclamacao="Demora na compensação do boleto do pedido #19",
+        order_id=19,
+    )
+    assert sac["sucesso"] is True
+    assert sac["protocolo"].startswith("SAC-2026-")
+    assert "24 horas úteis" in sac["prazo_retorno_sla"]
