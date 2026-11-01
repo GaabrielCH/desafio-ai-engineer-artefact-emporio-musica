@@ -1,4 +1,4 @@
-"""Gera o PDF executivo da Documentação e README do projeto para submissão no formulário da Artefact."""
+"""Generates the executive English PDF of the Project README & Technical Documentation for Artefact submission."""
 
 from __future__ import annotations
 
@@ -6,47 +6,51 @@ import subprocess
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-HTML_OUT = BASE_DIR / "docs" / "readme_documentation.html"
-PDF_REPO_OUT = BASE_DIR / "Documentacao_README_AI_Engineer_Artefact.pdf"
-PDF_DOWNLOADS_OUT = BASE_DIR.parent / "Documentacao_README_AI_Engineer_Artefact.pdf"
+HTML_OUT = BASE_DIR / "docs" / "readme_documentation_en.html"
+PDF_TARGETS = [
+    BASE_DIR / "Documentacao_README_AI_Engineer_Artefact.pdf",
+    BASE_DIR / "Documentation_README_AI_Engineer_Artefact.pdf",
+    BASE_DIR.parent / "Documentacao_README_AI_Engineer_Artefact.pdf",
+    BASE_DIR.parent / "Documentation_README_AI_Engineer_Artefact.pdf",
+]
 
 HTML_CONTENT = """<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Documentação Técnica & README — Desafio AI Engineer (Artefact)</title>
+<title>Technical Documentation & README — AI Engineer Technical Challenge (Artefact)</title>
 <style>
   @page {
     size: A4;
-    margin: 16mm 15mm 16mm 15mm;
+    margin: 15mm 15mm 15mm 15mm;
   }
   * {
     box-sizing: border-box;
   }
   body {
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 10pt;
-    line-height: 1.48;
+    font-size: 9.8pt;
+    line-height: 1.46;
     color: #1e293b;
     margin: 0;
     padding: 0;
   }
   .header-banner {
     border-bottom: 3px solid #e11d48;
-    padding-bottom: 12px;
-    margin-bottom: 18px;
+    padding-bottom: 11px;
+    margin-bottom: 16px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
   }
   .header-title h1 {
-    font-size: 18pt;
+    font-size: 17.5pt;
     color: #0f172a;
     margin: 0 0 4px 0;
     letter-spacing: -0.3px;
   }
   .header-title p {
-    font-size: 10pt;
+    font-size: 9.8pt;
     color: #475569;
     margin: 0;
   }
@@ -60,9 +64,9 @@ HTML_CONTENT = """<!DOCTYPE html>
     border: 1px solid #cbd5e1;
     border-left: 4px solid #0f172a;
     border-radius: 6px;
-    padding: 10px 14px;
-    margin-bottom: 16px;
-    font-size: 9.5pt;
+    padding: 9px 14px;
+    margin-bottom: 14px;
+    font-size: 9.3pt;
   }
   .repo-box a {
     color: #be123c;
@@ -70,26 +74,26 @@ HTML_CONTENT = """<!DOCTYPE html>
     text-decoration: none;
   }
   h2 {
-    font-size: 13pt;
+    font-size: 12.6pt;
     color: #0f172a;
     border-bottom: 1.5px solid #e2e8f0;
     padding-bottom: 4px;
-    margin-top: 18px;
-    margin-bottom: 10px;
+    margin-top: 16px;
+    margin-bottom: 9px;
     page-break-after: avoid;
   }
   h3 {
-    font-size: 10.8pt;
+    font-size: 10.5pt;
     color: #1e293b;
-    margin-top: 12px;
-    margin-bottom: 6px;
+    margin-top: 11px;
+    margin-bottom: 5px;
     page-break-after: avoid;
   }
   p {
-    margin: 0 0 8px 0;
+    margin: 0 0 7px 0;
   }
   ul, ol {
-    margin: 0 0 10px 0;
+    margin: 0 0 9px 0;
     padding-left: 20px;
   }
   li {
@@ -97,7 +101,7 @@ HTML_CONTENT = """<!DOCTYPE html>
   }
   code {
     font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
-    font-size: 8.8pt;
+    font-size: 8.6pt;
     background: #f1f5f9;
     color: #0f172a;
     padding: 1px 4px;
@@ -106,13 +110,13 @@ HTML_CONTENT = """<!DOCTYPE html>
   pre {
     background: #0f172a;
     color: #f8fafc;
-    padding: 10px 12px;
+    padding: 9px 12px;
     border-radius: 6px;
-    font-size: 8.2pt;
-    line-height: 1.4;
+    font-size: 8.1pt;
+    line-height: 1.38;
     white-space: pre-wrap;
     word-break: break-word;
-    margin: 6px 0 12px 0;
+    margin: 6px 0 11px 0;
     page-break-inside: avoid;
   }
   pre code {
@@ -123,15 +127,15 @@ HTML_CONTENT = """<!DOCTYPE html>
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 8px 0 14px 0;
-    font-size: 9pt;
+    margin: 7px 0 13px 0;
+    font-size: 8.9pt;
     page-break-inside: avoid;
   }
   th {
     background: #0f172a;
     color: #ffffff;
     text-align: left;
-    padding: 7px 9px;
+    padding: 6px 9px;
     font-weight: 600;
   }
   td {
@@ -146,32 +150,32 @@ HTML_CONTENT = """<!DOCTYPE html>
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 12px;
-    margin: 10px 0 14px 0;
+    padding: 10px;
+    margin: 8px 0 13px 0;
     text-align: center;
     page-break-inside: avoid;
   }
   .card-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin: 8px 0 14px 0;
+    gap: 9px;
+    margin: 7px 0 12px 0;
   }
   .card {
     border: 1px solid #cbd5e1;
     border-radius: 6px;
-    padding: 9px 11px;
+    padding: 8px 11px;
     background: #ffffff;
     page-break-inside: avoid;
   }
   .card h4 {
     margin: 0 0 4px 0;
-    font-size: 9.8pt;
+    font-size: 9.5pt;
     color: #be123c;
   }
   .card p {
     margin: 0;
-    font-size: 8.8pt;
+    font-size: 8.6pt;
     color: #334155;
   }
   .example-box {
@@ -179,22 +183,19 @@ HTML_CONTENT = """<!DOCTYPE html>
     border-left: 4px solid #be123c;
     background: #fff;
     border-radius: 5px;
-    padding: 8px 12px;
-    margin-bottom: 9px;
+    padding: 7px 11px;
+    margin-bottom: 8px;
     page-break-inside: avoid;
   }
   .example-box h4 {
-    margin: 0 0 4px 0;
-    font-size: 9.8pt;
+    margin: 0 0 3px 0;
+    font-size: 9.5pt;
     color: #0f172a;
   }
   .example-box p {
     margin: 0;
-    font-size: 8.8pt;
+    font-size: 8.6pt;
     color: #334155;
-  }
-  .page-break {
-    page-break-before: always;
   }
 </style>
 </head>
@@ -202,193 +203,193 @@ HTML_CONTENT = """<!DOCTYPE html>
 
 <div class="header-banner">
   <div class="header-title">
-    <h1>Empório da Música — Agente Inteligente de Atendimento</h1>
-    <p>Desafio Técnico — AI Engineer (Artefact) | Documentação Técnica &amp; README</p>
+    <h1>Empório da Música — AI Customer Support Agent</h1>
+    <p>Technical Challenge — AI Engineer (Artefact) | Project README &amp; Architecture Documentation</p>
   </div>
   <div class="header-meta">
-    <strong>Autor:</strong> Gabriel Camlofski Horst<br>
-    <strong>Linguagem:</strong> Python 3.10+
+    <strong>Author:</strong> Gabriel Camlofski Horst<br>
+    <strong>Stack:</strong> Python 3.10+ | SQLite | Hybrid RAG | ReAct
   </div>
 </div>
 
 <div class="repo-box">
-  <strong>🔗 Repositório Git Público (GitHub):</strong>
+  <strong>🔗 Public GitHub Repository:</strong>
   <a href="https://github.com/GaabrielCH/desafio-ai-engineer-artefact-emporio-musica">
     https://github.com/GaabrielCH/desafio-ai-engineer-artefact-emporio-musica
   </a><br>
-  <span>Contém código-fonte modular (<code>src/</code>), suíte de testes automatizados (<code>tests/</code>), 5 transcrições completas de conversas (<code>examples/</code>) e histórico progressivo de commits.</span>
+  <span>Includes modular source code (<code>src/</code>), automated test suite (<code>tests/</code>), 5 full multi-turn conversation transcripts (<code>examples/</code>), and a progressive Git commit history.</span>
 </div>
 
-<h2>1. Visão Geral e Arquitetura da Solução</h2>
+<h2>1. Overview &amp; System Architecture</h2>
 <p>
-  A <strong>Empório da Música</strong> (Campo Grande/MS) necessita de um agente capaz de lidar com dois tipos distintos de informação:
-  <strong>(1) Dados operacionais estruturados (<code>data/*.csv</code>)</strong> — produtos, estoque, preços, promoções e pedidos — que exigem precisão numérica absoluta sem alucinação; e
-  <strong>(2) Diretrizes normativas (<code>data/políticas_da_loja.pdf</code>)</strong> — regras de troca/devolução, prazos, garantia, frete, horários e escopo de atendimento.
+  <strong>Empório da Música</strong> (a musical instrument store located in Campo Grande/MS, Brazil) requires an AI assistant capable of handling two fundamentally different information retrieval paradigms:
+  <strong>(1) Structured Transactional Data (<code>data/*.csv</code>)</strong> — product catalog, live stock levels, pricing, active vs. expired promotions, and customer orders — which require zero numerical hallucination; and
+  <strong>(2) Unstructured Normative Policies (<code>data/políticas_da_loja.pdf</code>)</strong> — return/exchange rules, consumer warranty (CDC), shipping modalities, business hours, and store scope guardrails.
 </p>
 <p>
-  Para atender ambos os cenários com rigor de produção, projetamos uma <strong>Arquitetura Híbrida baseada em Function Calling (ReAct) + Banco Relacional SQLite Higienizado + RAG Tri-Modal com Reciprocal Rank Fusion (RRF)</strong>:
+  To solve both requirements with production-grade reliability, we implemented a <strong>Hybrid Agent Architecture combining Function Calling (ReAct) + Sanitized Relational SQLite Store + Tri-Modal Policy RAG with Reciprocal Rank Fusion (RRF)</strong>:
 </p>
 
 <div class="arch-container">
-  <svg width="680" height="215" viewBox="0 0 680 215" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
+  <svg width="680" height="210" viewBox="0 0 680 210" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
     <defs>
       <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
       </marker>
     </defs>
-    <!-- Cliente -->
-    <rect x="10" y="75" width="115" height="60" rx="6" fill="#0f172a" />
-    <text x="67" y="102" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">Cliente (CLI/API)</text>
-    <text x="67" y="118" fill="#cbd5e1" font-size="9" text-anchor="middle">Mensagens de Texto</text>
+    <!-- Customer -->
+    <rect x="10" y="72" width="115" height="60" rx="6" fill="#0f172a" />
+    <text x="67" y="99" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">Customer (CLI/API)</text>
+    <text x="67" y="115" fill="#cbd5e1" font-size="9" text-anchor="middle">Text Messages</text>
 
-    <!-- Agente + Memoria -->
-    <rect x="155" y="55" width="160" height="100" rx="6" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8" />
-    <text x="235" y="80" fill="#9f1239" font-size="11" font-weight="bold" text-anchor="middle">EmporioMusicaAgent</text>
-    <text x="235" y="96" fill="#334155" font-size="9" text-anchor="middle">Loop ReAct + Persona</text>
-    <text x="235" y="112" fill="#334155" font-size="9" text-anchor="middle">Multi-LLM (Gemini/OpenAI/</text>
-    <text x="235" y="125" fill="#334155" font-size="9" text-anchor="middle">Groq/Ollama + Local Engine)</text>
-    <text x="235" y="142" fill="#0f172a" font-size="8.5" font-weight="bold" text-anchor="middle">Memória SQLite (Sessões)</text>
+    <!-- Agent + Memory -->
+    <rect x="155" y="52" width="160" height="100" rx="6" fill="#fff1f2" stroke="#e11d48" stroke-width="1.8" />
+    <text x="235" y="77" fill="#9f1239" font-size="11" font-weight="bold" text-anchor="middle">EmporioMusicaAgent</text>
+    <text x="235" y="93" fill="#334155" font-size="9" text-anchor="middle">ReAct Loop + Store Persona</text>
+    <text x="235" y="109" fill="#334155" font-size="9" text-anchor="middle">Multi-LLM (Gemini/OpenAI/</text>
+    <text x="235" y="122" fill="#334155" font-size="9" text-anchor="middle">Groq/Ollama + Local Engine)</text>
+    <text x="235" y="139" fill="#0f172a" font-size="8.5" font-weight="bold" text-anchor="middle">SQLite Session Memory</text>
 
     <!-- AgentToolkit -->
-    <rect x="350" y="65" width="125" height="80" rx="6" fill="#f1f5f9" stroke="#475569" stroke-width="1.5" />
-    <text x="412" y="92" fill="#0f172a" font-size="10.5" font-weight="bold" text-anchor="middle">AgentToolkit</text>
-    <text x="412" y="108" fill="#334155" font-size="8.8" text-anchor="middle">8 Function Calling</text>
-    <text x="412" y="122" fill="#334155" font-size="8.8" text-anchor="middle">Tools + Guardrails</text>
+    <rect x="350" y="62" width="125" height="80" rx="6" fill="#f1f5f9" stroke="#475569" stroke-width="1.5" />
+    <text x="412" y="89" fill="#0f172a" font-size="10.5" font-weight="bold" text-anchor="middle">AgentToolkit</text>
+    <text x="412" y="105" fill="#334155" font-size="8.8" text-anchor="middle">8 Function Calling</text>
+    <text x="412" y="119" fill="#334155" font-size="8.8" text-anchor="middle">Tools + Guardrails</text>
 
     <!-- SQLite Store -->
-    <rect x="510" y="15" width="160" height="88" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" />
-    <text x="590" y="36" fill="#1d4ed8" font-size="10" font-weight="bold" text-anchor="middle">SQLite Operacional (CSVs)</text>
-    <text x="590" y="52" fill="#334155" font-size="8.5" text-anchor="middle">products, promotions, orders</text>
-    <text x="590" y="65" fill="#334155" font-size="8.5" text-anchor="middle">customers, order_items</text>
-    <text x="590" y="78" fill="#1e40af" font-size="8.5" font-weight="bold" text-anchor="middle">+ return_requests (Reversa)</text>
-    <text x="590" y="91" fill="#1e40af" font-size="8.5" font-weight="bold" text-anchor="middle">+ complaint_tickets (SAC)</text>
+    <rect x="510" y="12" width="160" height="88" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" />
+    <text x="590" y="33" fill="#1d4ed8" font-size="10" font-weight="bold" text-anchor="middle">Operational SQLite (CSVs)</text>
+    <text x="590" y="49" fill="#334155" font-size="8.5" text-anchor="middle">products, promotions, orders</text>
+    <text x="590" y="62" fill="#334155" font-size="8.5" text-anchor="middle">customers, order_items</text>
+    <text x="590" y="75" fill="#1e40af" font-size="8.5" font-weight="bold" text-anchor="middle">+ return_requests (Reverse)</text>
+    <text x="590" y="88" fill="#1e40af" font-size="8.5" font-weight="bold" text-anchor="middle">+ complaint_tickets (SAC)</text>
 
     <!-- Policy RAG -->
-    <rect x="510" y="118" width="160" height="82" rx="6" fill="#ecfdf5" stroke="#059669" stroke-width="1.5" />
-    <text x="590" y="139" fill="#047857" font-size="10" font-weight="bold" text-anchor="middle">PolicyRAG (PDF Manual)</text>
-    <text x="590" y="155" fill="#334155" font-size="8.5" text-anchor="middle">10 Seções Semânticas</text>
-    <text x="590" y="168" fill="#334155" font-size="8.5" text-anchor="middle">TF-IDF + Char N-Gram + SVD</text>
-    <text x="590" y="182" fill="#065f46" font-size="8.5" font-weight="bold" text-anchor="middle">Reciprocal Rank Fusion (RRF)</text>
+    <rect x="510" y="115" width="160" height="82" rx="6" fill="#ecfdf5" stroke="#059669" stroke-width="1.5" />
+    <text x="590" y="136" fill="#047857" font-size="10" font-weight="bold" text-anchor="middle">PolicyRAG (PDF Manual)</text>
+    <text x="590" y="152" fill="#334155" font-size="8.5" text-anchor="middle">10 Semantic Sections</text>
+    <text x="590" y="165" fill="#334155" font-size="8.5" text-anchor="middle">TF-IDF + Char N-Gram + SVD</text>
+    <text x="590" y="179" fill="#065f46" font-size="8.5" font-weight="bold" text-anchor="middle">Reciprocal Rank Fusion (RRF)</text>
 
-    <!-- Setas -->
-    <line x1="125" y1="105" x2="153" y2="105" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)" />
-    <line x1="315" y1="105" x2="348" y2="105" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)" />
-    <line x1="475" y1="88" x2="508" y2="62" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)" />
-    <line x1="475" y1="122" x2="508" y2="155" stroke="#059669" stroke-width="1.5" marker-end="url(#arrow)" />
+    <!-- Arrows -->
+    <line x1="125" y1="102" x2="153" y2="102" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)" />
+    <line x1="315" y1="102" x2="348" y2="102" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)" marker-start="url(#arrow)" />
+    <line x1="475" y1="85" x2="508" y2="59" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)" />
+    <line x1="475" y1="119" x2="508" y2="152" stroke="#059669" stroke-width="1.5" marker-end="url(#arrow)" />
   </svg>
 </div>
 
-<h2>2. Justificativa das Decisões Técnicas</h2>
+<h2>2. Technical Decisions &amp; Justification</h2>
 <table>
   <thead>
     <tr>
-      <th style="width:22%;">Decisão</th>
-      <th style="width:26%;">Escolha Adotada</th>
-      <th style="width:52%;">Justificativa Técnica</th>
+      <th style="width:22%;">Decision Area</th>
+      <th style="width:26%;">Chosen Approach</th>
+      <th style="width:52%;">Technical Justification</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Abordagem / Framework</strong></td>
-      <td><strong>Híbrida: Function Calling (ReAct) + SQL Relacional + Policy RAG</strong></td>
-      <td>Consultas sobre catálogo e pedidos exigem filtros numéricos exatos (<code>preco &lt;= 1000</code>, <code>stock &gt; 0</code>, <code>is_active == 1</code>) e <em>joins</em> relacionais, onde um RAG puramente vetorial alucinaria valores. Já o manual em PDF é recuperado via RAG estruturado por seções.</td>
+      <td><strong>Agent Architecture</strong></td>
+      <td><strong>Hybrid: Function Calling (ReAct) + Relational SQL + Policy RAG</strong></td>
+      <td>Tabular data (<code>products.csv</code>, <code>orders.csv</code>, <code>promotions.csv</code>) requires exact numerical filtering (<code>price &lt;= 1000</code>, <code>stock &gt; 0</code>, <code>is_active == 1</code>) and relational joins, where pure vector RAG would hallucinate figures. Conversely, the PDF policy manual is best served by structural section-based RAG.</td>
     </tr>
     <tr>
-      <td><strong>Retrieval sobre Políticas (PDF)</strong></td>
-      <td><strong>Chunking por Seção + Tri-Modal (TF-IDF + Char N-Grams + LSA/SVD Dense) + RRF</strong></td>
-      <td>O manual de 8 páginas é segmentado nas 10 seções numeradas reais do documento (preservando tabelas de frete e parcelamento inteiras). O ranking combina similaridade lexical, n-gramas de caracteres (tolerante a erros de digitação) e vetores semânticos densos via <em>Reciprocal Rank Fusion (RRF)</em>.</td>
+      <td><strong>Policy Retrieval (PDF RAG)</strong></td>
+      <td><strong>Section Chunking + Tri-Modal (Word TF-IDF + Char N-Grams + LSA/SVD Dense) + RRF</strong></td>
+      <td>The 8-page PDF is segmented into its 10 numbered semantic sections (preserving payment/shipping tables intact). Retrieval fuses lexical word n-grams, character n-grams (typo-resilient), and L2-normalized dense semantic vectors (<code>TruncatedSVD</code>) via <em>Reciprocal Rank Fusion (RRF)</em>.</td>
     </tr>
     <tr>
-      <td><strong>Regras de Negócio e Cálculos</strong></td>
-      <td><strong>8 Tools Determinísticas em Python</strong></td>
-      <td>Cálculos críticos — desconto PIX de 5% não cumulativo com promoções ativas (Seção 6.2), parcelamento escalonado (mín. R$ 50 até 3x; R$ 80 de 4–6x; R$ 100 de 7–12x — Seção 3.1) e contagem de dias corridos para Direito de Arrependimento (7 dias) e Garantia (30/90 dias) — são executados em Python e entregues prontos ao LLM.</td>
+      <td><strong>Deterministic Business Logic</strong></td>
+      <td><strong>8 Specialized Python Tools with Built-in Calculators</strong></td>
+      <td>Critical financial and legal rules — 5% PIX discount non-cumulativity with active promos (Sec. 6.2), tiered interest-free installments (min. R$ 50 for 1–3x; R$ 80 for 4–6x; R$ 100 for 7–12x — Sec. 3.1), and calendar-day windows for Buyer's Remorse (7 days) and Warranty (30/90 days) — are computed deterministically in Python.</td>
     </tr>
     <tr>
-      <td><strong>Modelo e Provedor</strong></td>
-      <td><strong>Agnóstico (Gemini, OpenAI, Groq, Ollama) + Motor ReAct Local</strong></td>
-      <td>Suporta Function Calling nativo via API (<code>gemini-2.5-flash</code>, <code>gpt-4o-mini</code>, <code>llama-3.3-70b</code>) e inclui um motor ReAct determinístico local (<code>LLM_PROVIDER=auto</code>) que permite testar todo o projeto imediatamente após o <code>git clone</code> mesmo sem chaves externas.</td>
+      <td><strong>LLM Provider &amp; Model</strong></td>
+      <td><strong>Multi-Provider (Gemini, OpenAI, Groq, Ollama) + Local ReAct Fallback</strong></td>
+      <td>Supports native API Function Calling (<code>gemini-2.5-flash</code>, <code>gpt-4o-mini</code>, <code>llama-3.3-70b</code>) and includes a zero-config deterministic local ReAct engine (<code>LLM_PROVIDER=auto</code>) so evaluators can run and test the entire system out-of-the-box after <code>git clone</code> even without external API keys.</td>
     </tr>
     <tr>
-      <td><strong>Persistência de Histórico</strong></td>
+      <td><strong>Conversation Persistence</strong></td>
       <td><strong>SQLite (<code>data/chat_history.db</code>)</strong></td>
-      <td>Armazena sessões, mensagens e o trace JSON de todas as ferramentas invocadas em cada turno, permitindo retomada de contexto e resolução de correferências multi-turno.</td>
+      <td>Persists sessions, user/assistant turns, and full JSON tool call traces, enabling multi-turn coreference resolution (e.g., <em>"What about its installments?"</em>) and auditability.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>3. Tratamento de Dados, Anomalias Detectadas e Suposições</h2>
-<p>Durante a auditoria dos arquivos <code>data/*.csv</code> e <code>data/políticas_da_loja.pdf</code>, identificamos e tratamos automaticamente no código (<code>src/database.py</code> e <code>src/policy_rag.py</code>) os seguintes casos de borda:</p>
+<h2>3. Data Sanitization, Detected Anomalies &amp; Documented Assumptions</h2>
+<p>During exploratory data analysis of <code>data/*.csv</code> and <code>data/políticas_da_loja.pdf</code>, we identified and programmatically handled (<code>src/database.py</code>, <code>src/policy_rag.py</code>) the following edge cases:</p>
 <ul>
-  <li><strong>Produto Ativo com Estoque Zero (<code>out_of_stock</code>):</strong> O violão <em>Giannini GF-3D Dreadnought Sunburst</em> (<code>product_id=96</code>) possui <code>status='active'</code> mas <code>stock_quantity=0</code>. Seguindo a Seção 7.3, ele nunca é ofertado como disponível e a tool sugere automaticamente 3 violões equivalentes em estoque.</li>
-  <li><strong>Produto Descontinuado com Estoque Residual (<code>discontinued</code>):</strong> O baixo <em>Ibanez Bass 2X</em> (<code>product_id=136</code>) possui <code>stock_quantity=13</code> mas <code>status='discontinued'</code> (assim como o violão 7 cordas <em>Shelby SN-7C</em>, ID 113). O status <code>discontinued</code> prevalece e o agente recomenda modelos equivalentes ativos.</li>
-  <li><strong>Promoções Ativas vs. Expiradas e Regra do PIX:</strong> Das 25 promoções em <code>promotions.csv</code>, apenas <strong>4 estão ativas (<code>is_active=1</code>)</strong>: <em>Kalani KAL-700T</em> (-10%), <em>Ohana CK-20</em> (-20%), <em>Crafter HT-100</em> (-18%) e <em>Taylor 110e</em> (-8%). As outras 21 (incluindo <em>Takamine GD20</em> com 12%) estão expiradas (<code>is_active=0</code>). O agente informa com transparência quando uma campanha encerrou (Seção 7.3) e bloqueia cumulatividade do PIX (5%) em itens já promocionais (Seção 6.2).</li>
-  <li><strong>Divergência Nome vs. Descrição (IDs 135–144) e Categorias Vazias (IDs 6, 7, 8):</strong> Itens sintéticos onde a descrição cita marca diferente do título recebem flag de anomalia priorizando o <code>name</code> canônico. As categorias <em>Sopro (Madeiras/Metais)</em> e <em>Cordas Orquestrais</em> (sem itens em <code>products.csv</code>) retornam aviso transparente de ausência de estoque cadastrado.</li>
-  <li><strong>Reconciliação de Ambiguidades do PDF:</strong> (a) A Seção 1.2 lista o telefone/WhatsApp <code>(67) 3341-4444</code> e a Seção 7 lista <code>(67) 3321-4500</code>; o agente apresenta ambos distinguindo loja física e central WhatsApp. (b) A Tabela 3 resume parcela mínima de R$ 100, enquanto a Seção 3.1 detalha o escalonamento R$ 50 (1–3x), R$ 80 (4–6x) e R$ 100 (7–12x), adotado na calculadora.</li>
+  <li><strong>Active Product with Zero Stock (<code>out_of_stock</code>):</strong> Acoustic guitar <em>Giannini GF-3D Dreadnought Sunburst</em> (<code>product_id=96</code>) has <code>status='active'</code> but <code>stock_quantity=0</code>. Per Section 7.3, it is excluded from available searches and, when queried directly, the tool flags unavailability and automatically recommends 3 in-stock alternatives.</li>
+  <li><strong>Discontinued Products with Residual Stock (<code>discontinued</code>):</strong> Bass <em>Ibanez Bass 2X</em> (<code>product_id=136</code>) has <code>stock_quantity=13</code> but <code>status='discontinued'</code> (along with 7-string guitar <em>Shelby SN-7C</em>, ID 113). The <code>discontinued</code> status takes precedence and the agent suggests active equivalents (Section 7.3).</li>
+  <li><strong>Active vs. Expired Promotions &amp; PIX Non-Cumulativity:</strong> Out of 25 rows in <code>promotions.csv</code>, only <strong>4 are active (<code>is_active=1</code>)</strong>: <em>Kalani KAL-700T</em> (-10%), <em>Ohana CK-20</em> (-20%), <em>Crafter HT-100</em> (-18%), and <em>Taylor 110e</em> (-8%). The remaining 21 (including <em>Takamine GD20</em> at 12%) are expired (<code>is_active=0</code>). The agent transparently informs when a past promotion has ended (Section 7.3) and prevents stacking the 5% PIX discount on already discounted items (Section 6.2).</li>
+  <li><strong>Title vs. Description Mismatches (IDs 135–144) &amp; Empty Categories (IDs 6, 7, 8):</strong> Synthetic items where the description mentions a different brand than the title are flagged with a <code>data_anomaly</code> prioritizing the canonical <code>name</code>. Categories <em>Wind Instruments (Woodwinds/Brass)</em> and <em>Orchestral Strings</em> (0 rows in <code>products.csv</code>) return a transparent stock notice.</li>
+  <li><strong>PDF Internal Ambiguities Reconciled:</strong> (a) Section 1.2 lists phone/WhatsApp <code>(67) 3341-4444</code> while Section 7 lists <code>(67) 3321-4500</code>; the agent provides both (physical store vs. remote WhatsApp central). (b) Table 3 summarizes a R$ 100 minimum installment, while Section 3.1 details the exact tiers: R$ 50 (1–3x), R$ 80 (4–6x), and R$ 100 (7–12x), which we enforced in the payment calculator.</li>
 </ul>
 
-<h2>4. Evoluções Implementadas com Sucesso (Além do Escopo Base)</h2>
+<h2>4. Production Evolutions Implemented Beyond Base Scope</h2>
 <div class="card-grid">
   <div class="card">
-    <h4>🔒 1. Verificação em 2 Fatores (2FA) e Mascaramento LGPD</h4>
-    <p>Em conformidade com a Seção 9 (LGPD), buscas de pedido apenas por número (ex.: <code>#7</code>) mascaram e-mail e telefone (<code>le***a@jmail.com</code>, <code>(67) *****-0123</code>). Ao confirmar titularidade (nome, e-mail ou telefone), o status muda para <code>verificado_2_fatores</code>.</p>
+    <h4>🔒 1. LGPD 2-Factor Verification &amp; PII Masking</h4>
+    <p>Compliant with Section 9 (LGPD): querying an order by ID alone (e.g., <code>#7</code>) masks customer PII (<code>le***a@jmail.com</code>, <code>(67) *****-0123</code>). Providing a matching 2nd factor (name, email, or phone) unlocks <code>verificado_2_fatores</code>.</p>
   </div>
   <div class="card">
-    <h4>🚚 2. Motor Tarifário de Frete por Peso e Cubagem</h4>
-    <p>Estimativa automática de peso/dimensões por categoria (Ukulele 1,2 kg; Violão 3,2 kg; Guitarra 4,8 kg; Bateria 28 kg) + cálculo de frete regional (Interior MS vs. Outros Estados) + seguro <em>ad valorem</em> (1,5%) para PAC, Jadlog e SEDEX.</p>
+    <h4>🚚 2. Weight/Cubage &amp; Regional Tariff Shipping Engine</h4>
+    <p>Estimates package weight/dimensions by category (Ukulele 1.2 kg; Acoustic Guitar 3.2 kg; Electric Guitar 4.8 kg; Drums 28 kg) + regional tariff calculation (MS Interior vs. Other States) + 1.5% <em>ad valorem</em> insurance for PAC, Jadlog, and SEDEX.</p>
   </div>
   <div class="card">
-    <h4>🎫 3. Logística Reversa e Chamados SAC (Write Tools)</h4>
-    <p>Tools transacionais <code>registrar_solicitacao_troca_devolucao</code> (gera protocolo <code>TROCA-2026-XXXX</code> e código de postagem reversa gratuita <code>LOG-REV-BR...</code>) e <code>abrir_chamado_reclamacao</code> (protocolo <code>SAC-2026-XXXX</code> com SLA de 24h úteis — Seção 7.3).</p>
+    <h4>🎫 3. Reverse Logistics &amp; SAC Escalation Write Tools</h4>
+    <p>Transactional tools <code>registrar_solicitacao_troca_devolucao</code> (issues protocol <code>TROCA-2026-XXXX</code> and prepaid Correios reverse code <code>LOG-REV-BR...</code>) and <code>abrir_chamado_reclamacao</code> (protocol <code>SAC-2026-XXXX</code> with 24-business-hour SLA — Sec. 7.3).</p>
   </div>
   <div class="card">
-    <h4>🧠 4. RAG Denso (LSA/SVD) + Reciprocal Rank Fusion</h4>
-    <p>O <code>PolicyRAG</code> combina 3 sinais (TF-IDF de palavras com sublinear TF, Char N-Grams 3..5 e Embeddings Semânticos Densos via <code>TruncatedSVD</code> L2-normalizado) fundidos via <em>Reciprocal Rank Fusion (RRF)</em>.</p>
+    <h4>🧠 4. Dense Semantic RAG (LSA/SVD) + RRF</h4>
+    <p>Upgraded <code>PolicyRAG</code> combining 3 retrieval signals (sublinear word TF-IDF, char_wb 3..5 n-grams, and L2-normalized <code>TruncatedSVD</code> dense semantic embeddings) fused via <em>Reciprocal Rank Fusion (RRF)</em>.</p>
   </div>
 </div>
 
-<h2>5. Instruções de Execução e Comandos</h2>
-<pre><code># 1. Clonar o repositório e instalar dependências
+<h2>5. Setup &amp; Execution Instructions</h2>
+<pre><code># 1. Clone the repository and install dependencies
 git clone https://github.com/GaabrielCH/desafio-ai-engineer-artefact-emporio-musica.git
 cd desafio-ai-engineer-artefact-emporio-musica
 pip install -r requirements.txt
 
-# 2. Configurar variáveis de ambiente (.env opcional: funciona out-of-the-box com motor ReAct local
-#    ou conectado a GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, OPENAI_BASE_URL)
+# 2. Configure environment variables (.env is optional: works out-of-the-box with the local ReAct
+#    engine, or connects natively to GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, OPENAI_BASE_URL)
 cp .env.example .env
 
-# 3. Executar o chat interativo na CLI ou rodar a demonstração completa dos 5 cenários
+# 3. Start the interactive CLI chat or run the automated 5-scenario terminal demonstration
 python main.py
 python main.py --demo
 
-# 4. Executar a suíte de 8 testes automatizados (pytest)
+# 4. Run the automated test suite (8 unit &amp; integration tests via pytest)
 python -m pytest -v</code></pre>
 
-<h2>6. Exemplos de Interação Incluídos no Repositório (<code>examples/</code>)</h2>
+<h2>6. Conversation Examples Included in the Repository (<code>examples/</code>)</h2>
 <div class="example-box">
-  <h4>📄 01_catalogo_violoes_ate_1000.md — Consulta ao Catálogo + Produtos Indisponíveis/Descontinuados</h4>
-  <p>Lista os 12 violões disponíveis até R$ 1.000,00 (separados em cordas de nylon e aço com valor PIX e parcelas). No Turno 2, trata a consulta ao <em>Giannini GF-3D</em> (estoque 0) e <em>Shelby SN-7C</em> (descontinuado), aplicando a Seção 7.3 e sugerindo alternativas em estoque.</p>
+  <h4>📄 01_catalogo_violoes_ate_1000.md — Catalog Search &amp; Out-of-Stock / Discontinued Handling</h4>
+  <p>Lists the 12 available acoustic guitars up to R$ 1,000.00 (grouped into nylon and steel strings with PIX and installment pricing). In Turn 2, handles queries for <em>Giannini GF-3D</em> (0 stock) and <em>Shelby SN-7C</em> (discontinued), applying Section 7.3 and recommending in-stock alternatives.</p>
 </div>
 <div class="example-box">
-  <h4>📄 02_preco_promocoes_e_pagamento_takamine.md — Preço, Promoções Expiradas vs. Ativas e Regras do PIX</h4>
-  <p>Detalha o <em>Takamine GD20</em> (R$ 2.199,00 | PIX R$ 2.089,05 | 12x de R$ 183,25 | combinação de pagamentos &gt; R$ 2.000), informa que a campanha anterior de 12% encerrou (<code>is_active=0</code>) e demonstra a não-cumulatividade do PIX no <em>Taylor 110e</em> em promoção ativa (-8%).</p>
+  <h4>📄 02_preco_promocoes_e_pagamento_takamine.md — Pricing, Expired vs. Active Promotions &amp; PIX Rules</h4>
+  <p>Details the <em>Takamine GD20</em> (R$ 2,199.00 | PIX R$ 2,089.05 | 12x of R$ 183.25 | combined payment &gt; R$ 2,000), transparently informs that its past 12% promo expired (<code>is_active=0</code>), and explains PIX non-cumulativity on the actively discounted <em>Taylor 110e</em> (-8%).</p>
 </div>
 <div class="example-box">
-  <h4>📄 03_devolucao_arrependimento_e_rastreio_pedidos.md — Situação Não-Trivial: CDC + Pedidos + Logística Reversa</h4>
-  <p>Explica as regras da Seção 4, valida em tempo real o <strong>Pedido #7</strong> da cliente <em>Letícia Gonçalves Rocha</em> (verificação LGPD 2FA), confirma elegibilidade dentro dos 7 dias corridos da entrega e emite protocolo <code>TROCA-2026-0007</code> com código reverso <code>LOG-REV-BR0007EMP26BR</code>, além de rastrear o <strong>Pedido #8</strong> (<code>BRJL5544332BR</code>).</p>
+  <h4>📄 03_devolucao_arrependimento_e_rastreio_pedidos.md — Non-Trivial Scenario: CDC Policies + Live Order + Reverse Logistics</h4>
+  <p>Explains Section 4 return rules, verifies <strong>Order #7</strong> for customer <em>Letícia Gonçalves Rocha</em> (2FA LGPD verification), confirms eligibility within the 7-calendar-day delivery window, automatically issues protocol <code>TROCA-2026-0007</code> + prepaid reverse code <code>LOG-REV-BR0007EMP26BR</code>, and tracks <strong>Order #8</strong> (<code>BRJL5544332BR</code>).</p>
 </div>
 <div class="example-box">
-  <h4>📄 04_informacoes_gerais_frete_e_horario.md — Endereço, Horários, Contatos e Cotação de Frete</h4>
-  <p>Apresenta endereço, horários (seg–sex 09h–18h, sáb 09h–13h) e compara o frete de um violão de R$ 600 para <strong>Campo Grande/MS</strong> (Grátis acima de R$ 500 via motoboy em 1–3 dias úteis) vs. <strong>Dourados/MS</strong> (cotações PAC R$ 55,10, Jadlog R$ 67,34 e SEDEX R$ 87,46 com seguro incluso).</p>
+  <h4>📄 04_informacoes_gerais_frete_e_horario.md — Store Info, Opening Hours &amp; Regional Shipping Quotes</h4>
+  <p>Provides store address, hours (Mon–Fri 09:00–18:00, Sat 09:00–13:00), and compares shipping for a R$ 600 guitar to <strong>Campo Grande/MS</strong> (Free &gt; R$ 500 via own courier in 1–3 business days) vs. <strong>Dourados/MS</strong> (PAC R$ 55.10, Jadlog R$ 67.34, SEDEX R$ 87.46 with insurance included).</p>
 </div>
 <div class="example-box">
-  <h4>📄 05_fora_de_escopo_acessorios_e_off_topic.md — Guardrails de Escopo (Acessórios e Off-Topic)</h4>
-  <p>Recusa educadamente a venda de acessórios (encordoamento Elixir, palhetas e amplificador — Seções 1 e 7.1) e redireciona com bom humor perguntas fora do contexto da loja (receita culinária).</p>
+  <h4>📄 05_fora_de_escopo_acessorios_e_off_topic.md — Scope Guardrails (Accessories &amp; Off-Topic Requests)</h4>
+  <p>Politely declines accessory requests (Elixir strings, picks, and guitar amplifier — Sections 1 &amp; 7.1, as the store sells exclusively musical instruments) and redirects off-topic questions (carrot cake recipe) while maintaining the store persona.</p>
 </div>
 
-<h2>7. Próximos Passos para Produção &amp; Uso de Assistentes de IA</h2>
+<h2>7. Known Limitations, Next Steps &amp; AI Assistant Workflow</h2>
 <ul>
-  <li><strong>Próximos Passos em Ambiente Produtivo:</strong> Autenticação automática do 2º fator LGPD via token do Webhook oficial do WhatsApp Business (Meta Cloud API), integração direta com ERP/Correios REST API para baixa de estoque e painel web para a equipe acompanhar a fila de chamados <code>SAC-2026-XXXX</code> (SLA de 24h úteis).</li>
-  <li><strong>Workflow com Assistente de IA:</strong> Desenvolvimento realizado utilizando o assistente agêntico <strong>Antigravity (Google DeepMind)</strong> em fluxo de <em>pair programming</em>: (1) auditoria automatizada de todos os CSVs e OCR do PDF para mapear anomalias antes da codificação; (2) modelagem arquitetural separando SQLite transacional de RAG normativo; (3) geração modular assistida com bateria de testes <code>pytest</code>; e (4) geração reprodutível das conversas em <code>examples/</code>.</li>
+  <li><strong>Known Limitations &amp; Production Next Steps:</strong> (1) Bind the 2FA LGPD verification automatically to the authenticated WhatsApp Business Cloud API phone token or SMS/Email OTP; (2) Connect shipping and reverse-logistics tools to live Correios/Melhor Envio REST APIs and ERP inventory webhooks; (3) Expose a web dashboard for human agents to manage the 24-hour SLA queue in <code>complaint_tickets</code>.</li>
+  <li><strong>AI Coding Assistant Workflow:</strong> Developed using <strong>Antigravity (Google DeepMind)</strong> in an agentic pair-programming workflow: (1) automated exploratory audit of all CSVs and OCR of the PDF manual to map data anomalies prior to coding; (2) architectural separation between relational SQLite tools and section-based Policy RAG; (3) modular implementation validated by 8 automated <code>pytest</code> tests; and (4) reproducible generation of the 5 conversation transcripts in <code>examples/</code>.</li>
 </ul>
 
 </body>
@@ -406,9 +407,9 @@ def main() -> None:
     ]
     browser_exe = next((b for b in browsers if b.exists()), None)
     if not browser_exe:
-        raise RuntimeError("Nenhum navegador Chromium (Chrome/Edge) encontrado para gerar PDF.")
+        raise RuntimeError("No Chromium browser (Chrome/Edge) found for PDF generation.")
 
-    for target_pdf in (PDF_REPO_OUT, PDF_DOWNLOADS_OUT):
+    for target_pdf in PDF_TARGETS:
         cmd = [
             str(browser_exe),
             "--headless",
@@ -418,7 +419,7 @@ def main() -> None:
             HTML_OUT.resolve().as_uri(),
         ]
         subprocess.run(cmd, check=True)
-        print(f"PDF gerado com sucesso: {target_pdf} ({target_pdf.stat().st_size} bytes)")
+        print(f"Generated English PDF: {target_pdf} ({target_pdf.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":
