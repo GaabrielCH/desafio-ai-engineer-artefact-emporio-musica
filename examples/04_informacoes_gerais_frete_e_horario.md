@@ -53,20 +53,19 @@ Ficou com alguma dúvida ou quer que eu compare algum outro modelo para você? �
 ### 🤖 Agente (Empório da Música)
 
 ### 🚚 Frete e Prazos de Entrega — Campo Grande
-- **Região:** Região Metropolitana de Campo Grande/MS (Seção 5.1)
-- **Frete Grátis:** Para todos os pedidos **acima de R$ 500,00**!
-- **Pedidos abaixo de R$ 500,00:** Taxa fixa de **R$ 35,00**.
+- **Região:** Região Metropolitana de Campo Grande/MS (Seção 5.1) | Peso/Cubagem estimada: `3.2 kg` (`106x46x16 cm (Padrão Violão)`)
+- **Custo do Frete:** ✅ **GRÁTIS (R$ 0,00)** — pedido acima de R$ 500,00!
 - **Prazo de entrega:** **1 a 3 dias úteis** via **motoboy próprio** (nossa equipe entra em contato por telefone antes da entrega).
 
 ---
 
 ### 🚚 Frete e Prazos de Entrega — Dourados
-- **Região:** Outras Cidades / Fora da Região Metropolitana de Campo Grande (Seção 5.2)
-- **Cálculo do frete:** Calculado automaticamente com base no CEP de destino, peso e dimensões do produto.
-- **Modalidades e Prazos Estimados:**
-  - **SEDEX (Correios):** 2 a 5 dias úteis (Rastreamento + Seguro contra extravio/avaria inclusos)
-  - **Jadlog (.package):** 3 a 8 dias úteis (Rastreamento + Seguro contra extravio/avaria inclusos)
-  - **PAC (Correios):** 5 a 12 dias úteis (Rastreamento + Seguro contra extravio/avaria inclusos)
+- **Região:** Interior de Mato Grosso do Sul (Seção 5.2) | Peso/Cubagem estimada: `3.2 kg` (`106x46x16 cm (Padrão Violão)`)
+- **Cálculo do frete:** Calculado com base no CEP/região de destino, peso/cubagem do instrumento e seguro ad valorem (1,5%).
+- **Modalidades, Valores e Prazos Estimados:**
+  - **PAC (Correios):** 5 a 12 dias úteis — **R$ 55,10** *(Rastreamento + Seguro inclusos)*
+  - **Jadlog (.package):** 3 a 8 dias úteis — **R$ 67,34** *(Rastreamento + Seguro inclusos)*
+  - **SEDEX (Correios):** 2 a 5 dias úteis — **R$ 87,46** *(Rastreamento + Seguro inclusos)*
 - *Nota: Baterias acústicas, pianos digitais e contrabaixos podem exigir cotação individual de frete.*
 
 Ficou com alguma dúvida ou quer que eu compare algum outro modelo para você? 😊
