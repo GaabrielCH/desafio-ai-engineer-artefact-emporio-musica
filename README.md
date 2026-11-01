@@ -31,18 +31,20 @@ flowchart TD
     Agent --> LLM["🧠 Provedor LLM (Gemini / OpenAI / Groq / Ollama / Motor ReAct Local)"]
     LLM <--> Tools["🛠️ AgentToolkit (Function Calling)"]
 
-    subgraph StructuredData ["Camada Transacional (SQLite em Memória + Higienização)"]
+    subgraph StructuredData ["Camada Transacional e Operacional (SQLite + Higienização)"]
         Tools --> T1["buscar_produtos()"]
         Tools --> T2["detalhar_produto_e_pagamento()"]
         Tools --> T3["listar_promocoes()"]
-        Tools --> T4["consultar_pedido()"]
+        Tools --> T4["consultar_pedido() [LGPD 2FA]"]
         Tools --> T5["calcular_frete_e_entrega()"]
-        T1 & T2 & T3 & T4 --> DB[("SQLite: products, categories,\npromotions, orders, customers")]
+        Tools --> T7["registrar_solicitacao_troca_devolucao()"]
+        Tools --> T8["abrir_chamado_reclamacao()"]
+        T1 & T2 & T3 & T4 & T5 & T7 & T8 --> DB[("SQLite: products, categories, promotions,\norders, customers, return_requests, complaint_tickets")]
     end
 
-    subgraph UnstructuredRAG ["Camada Normativa (Policy RAG)"]
+    subgraph UnstructuredRAG ["Camada Normativa (Tri-Modal Policy RAG)"]
         Tools --> T6["consultar_politicas_loja()"]
-        T6 --> RAG["PolicyRAG (TF-IDF Word + Char N-Grams + Topic Boost)"]
+        T6 --> RAG["PolicyRAG (TF-IDF + Char N-Grams + LSA/SVD Dense + RRF)"]
         RAG --> PDF["📄 data/políticas_da_loja.pdf (10 Seções)"]
     end
 ```
@@ -205,12 +207,35 @@ Foram incluídas 5 conversas multi-turno completas na pasta [`examples/`](./exam
 
 ---
 
-## ⚠️ Limitações Conhecidas e Evoluções Futuras
+## ✨ Evoluções Implementadas com Sucesso (Além do Escopo Base)
 
-- **Autenticação de Clientes na Consulta de Pedidos**: No protótipo atual, qualquer usuário que informe o número do pedido ou nome do cliente consegue consultar o status do pedido. Em produção (em conformidade com a Seção 9 — LGPD), seria indispensável validar a identidade do cliente via token de sessão do WhatsApp (número de telefone verificado pela API oficial da Meta) ou confirmação de dois fatores (ex.: CPF/e-mail + código OTP).
-- **Cálculo de Frete para Outras Cidades**: Como os CSVs não contêm peso/cubagem dos instrumentos nem tabela tarifária de CEP dos Correios/Jadlog, a tool `calcular_frete_e_entrega` informa as modalidades e prazos oficiais da Seção 5.2. Com mais tempo, integraríamos a API de preços e prazos dos Correios/Melhor Envio.
-- **Abertura de Chamados e Logística Reversa**: Atualmente o agente orienta e valida a elegibilidade de trocas, devoluções e reclamações (Seção 4 e 7.3). O próximo passo natural seria adicionar tools de escrita (`registrar_solicitacao_troca`, `abrir_chamado_reclamacao`) integradas a um CRM/ERP ou fila de atendimento humano (handoff).
-- **RAG Semântico Denso (Embeddings)**: Para um manual de 8 páginas, o chunking estrutural por seção combinado com TF-IDF híbrido (palavras + caracteres) atinge 100% de recall nas 10 seções. Caso a base documental crescesse para centenas de manuais técnicos de fabricantes, adicionaríamos busca vetorial densa (`pgvector` ou `ChromaDB`) com *Reciprocal Rank Fusion (RRF)*.
+Além dos requisitos fundamentais do desafio, implementamos **4 evoluções de engenharia de produção** diretamente nos módulos do agente (todas cobertas por testes automatizados em `tests/test_agent_and_tools.py`):
+
+1. **Verificação em 2 Fatores e Mascaramento de PII (Conformidade LGPD — Seção 9)**:
+   - Na tool `consultar_pedido(identificador, verificacao_cliente)`, quando um pedido é consultado apenas pelo ID numérico (ex.: `#7`) sem confirmação de titularidade, os dados sensíveis do cliente são automaticamente mascarados (`le***a@jmail.com`, `(67) *****-0123` — status `parcial_pii_mascarado`).
+   - Quando o cliente fornece um segundo fator que coincide com o cadastro (nome completo, e-mail ou telefone, ex.: *"Sou a Letícia Gonçalves Rocha, meu pedido é o #7"*), o sistema valida a identidade (`verificado_2_fatores`), desbloqueia os dados completos e habilita ações transacionais no pedido.
+
+2. **Motor de Cotação de Frete por Peso/Cubagem e Tarifa Regional (`calcular_frete_e_entrega`)**:
+   - Como os CSVs originais não traziam peso/dimensões nem tabela tarifária para fora de Campo Grande, implementamos um estimador físico por categoria de instrumento (`Ukuleles`: 1,2 kg; `Violões`: 3,2 kg; `Guitarras`: 4,8 kg; `Baixos`: 5,8 kg; `Teclados`: 11,5 kg; `Baterias`: 28,0 kg — grande porte) combinado com cálculo tarifário regional (Interior do MS vs. Outros Estados) + **1,5% de seguro *ad valorem*** para **PAC (Correios)**, **Jadlog (.package)** e **SEDEX (Correios)**.
+
+3. **Tools Transacionais de Escrita: Logística Reversa Automática e Abertura de Chamados SAC (`return_requests` e `complaint_tickets`)**:
+   - **`registrar_solicitacao_troca_devolucao`**: Valida se o pedido entregue está dentro do prazo legal (7 dias corridos para Direito de Arrependimento/Preferência ou 30/90 dias para Defeito), grava a solicitação no banco SQLite, gera protocolo (`TROCA-2026-0007`) e emite imediatamente o **código de autorização de postagem reversa gratuita nos Correios (`LOG-REV-BR0007EMP26BR`)**.
+   - **`abrir_chamado_reclamacao`**: Implementa o fluxo da **Seção 7.3 (Reclamação)** do manual, registrando o protocolo (`SAC-2026-XXXX`) no banco SQLite e escalando para a Gerência de Atendimento com **SLA formal de 24 horas úteis**.
+
+4. **RAG Semântico Denso (LSA/SVD Embeddings) + *Reciprocal Rank Fusion (RRF)* (`src/policy_rag.py`)**:
+   - O `PolicyRAG` foi evoluído para um pipeline **tri-modal**, combinando:
+     1. *TF-IDF Lexical de Palavras (1–2 n-gramas com sublinear TF)*,
+     2. *TF-IDF de N-Gramas de Caracteres (3–5 char_wb para resiliência a erros de digitação)*, e
+     3. *Embeddings Semânticos Densos via Decomposição em Valores Singulares (`TruncatedSVD` / LSA L2-normalizado)*.
+   - Os três rankings são combinados via **Reciprocal Rank Fusion (`RRF`)**, garantindo altíssima precisão semântica mesmo quando o cliente utiliza vocabulário diferente do texto literal do PDF.
+
+---
+
+## ⚠️ Limitações Conhecidas e Próximos Passos para Produção
+
+- **Integração com Webhook Oficial do WhatsApp Business (Meta Cloud API) e OTP Real**: A verificação de 2 fatores LGPD já está implementada na camada de tools; em produção real na loja, o segundo fator seria validado automaticamente via número de telefone autenticado pelo webhook do WhatsApp ou envio de código OTP por e-mail/SMS.
+- **Integração Online com ERP e API dos Correios / Melhor Envio**: As tabelas de frete e os códigos de logística reversa (`LOG-REV-...`) são calculados e persistidos localmente no SQLite. Com mais tempo em ambiente produtivo, conectaríamos essas tools às APIs REST reais dos Correios/Jadlog e ao ERP da loja para baixa automática de estoque.
+- **Dashboard de Handoff Humano para a Equipe**: Os chamados gerados pelas tools `registrar_solicitacao_troca_devolucao` e `abrir_chamado_reclamacao` já ficam salvos nas tabelas SQLite `return_requests` e `complaint_tickets`. Um próximo passo seria expor um painel web para os atendentes humanos acompanharem a fila de SLA de 24h úteis.
 
 ---
 
