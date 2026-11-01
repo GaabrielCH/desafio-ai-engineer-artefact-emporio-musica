@@ -4,12 +4,30 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from src.config import settings
 from src.database import StoreDatabase, db, digits_only, normalize_text
 from src.policy_rag import PolicyRAG, policy_rag
+
+
+def _mask_email(email: str) -> str:
+    """Mascara e-mail para proteção de dados pessoais (LGPD — Seção 9)."""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        return f"{local[0]}***@{domain}"
+    return f"{local[:2]}***{local[-1]}@{domain}"
+
+
+def _mask_phone(phone: str) -> str:
+    """Mascara telefone exibindo apenas DDD e os 4 últimos dígitos (LGPD — Seção 9)."""
+    d = digits_only(phone)
+    if len(d) >= 10:
+        return f"({d[:2]}) *****-{d[-4:]}"
+    return "*****-****"
 
 ACCESSORY_KEYWORDS = [
     "encordoamento",
@@ -593,22 +611,27 @@ class AgentToolkit:
     def consultar_pedido(
         self,
         identificador: str,
+        verificacao_cliente: str | None = None,
     ) -> dict[str, Any]:
-        """Consulta status de pedido, itens, rastreio e elegibilidade para troca/devolução por ID, cliente, e-mail, telefone ou código de rastreio."""
+        """Consulta status de pedido, itens, rastreio e elegibilidade para troca/devolução com proteção LGPD."""
         raw = str(identificador).strip()
         q_norm = normalize_text(raw)
         q_digits = digits_only(raw)
+        verif_norm = normalize_text(verificacao_cliente or "")
+        verif_digits = digits_only(verificacao_cliente or "")
 
         # Remover prefixos comuns como "pedido #", "pedido", "#"
         cleaned_id = q_norm.replace("pedido", "").replace("#", "").strip()
 
         matched_orders: list[dict[str, Any]] = []
+        queried_by_id_only = False
 
         # 1. Busca por order_id exato
         if cleaned_id.isdigit():
+            queried_by_id_only = True
             matched_orders = self.db.execute_query(
                 """
-                SELECT o.*, c.name AS customer_name, c.email, c.phone, c.city
+                SELECT o.*, c.name AS customer_name, c.name_norm, c.email, c.email_norm, c.phone, c.phone_digits, c.city
                 FROM orders o
                 JOIN customers c ON o.customer_id = c.customer_id
                 WHERE o.order_id = ?
@@ -620,7 +643,7 @@ class AgentToolkit:
         if not matched_orders and len(raw) >= 6:
             matched_orders = self.db.execute_query(
                 """
-                SELECT o.*, c.name AS customer_name, c.email, c.phone, c.city
+                SELECT o.*, c.name AS customer_name, c.name_norm, c.email, c.email_norm, c.phone, c.phone_digits, c.city
                 FROM orders o
                 JOIN customers c ON o.customer_id = c.customer_id
                 WHERE LOWER(o.tracking_code) = LOWER(?)
@@ -647,7 +670,7 @@ class AgentToolkit:
                         {
                             "customer_id": c["customer_id"],
                             "nome": c["name"],
-                            "email": c["email"],
+                            "email": _mask_email(c["email"]),
                             "cidade": c["city"],
                         }
                     )
@@ -656,7 +679,7 @@ class AgentToolkit:
                 placeholders = ",".join("?" for _ in matched_cust_ids)
                 matched_orders = self.db.execute_query(
                     f"""
-                    SELECT o.*, c.name AS customer_name, c.email, c.phone, c.city
+                    SELECT o.*, c.name AS customer_name, c.name_norm, c.email, c.email_norm, c.phone, c.phone_digits, c.city
                     FROM orders o
                     JOIN customers c ON o.customer_id = c.customer_id
                     WHERE o.customer_id IN ({placeholders})
@@ -687,6 +710,21 @@ class AgentToolkit:
         detailed_orders: list[dict[str, Any]] = []
         for ord_row in matched_orders:
             oid = int(ord_row["order_id"])
+
+            # Verificação de 2 fatores LGPD (Seção 9):
+            # Se buscou apenas pelo ID numérico, verifica se o 2º fator (nome, e-mail ou telefone) bate com o titular
+            is_verified = not queried_by_id_only
+            if queried_by_id_only and verif_norm:
+                c_name_norm = str(ord_row.get("name_norm", normalize_text(ord_row["customer_name"])))
+                c_email_norm = str(ord_row.get("email_norm", ord_row["email"].lower()))
+                c_phone_dig = str(ord_row.get("phone_digits", digits_only(ord_row["phone"])))
+                if (
+                    any(tok in c_name_norm for tok in verif_norm.split() if len(tok) > 2)
+                    or verif_norm == c_email_norm
+                    or (verif_digits and len(verif_digits) >= 4 and verif_digits in c_phone_dig)
+                ):
+                    is_verified = True
+
             items = self.db.execute_query(
                 """
                 SELECT oi.quantity, p.product_id, p.name, p.price_brl, p.category_name
@@ -757,11 +795,16 @@ class AgentToolkit:
             detailed_orders.append(
                 {
                     "order_id": oid,
+                    "verificacao_lgpd": (
+                        "verificado_2_fatores"
+                        if is_verified
+                        else "parcial_pii_mascarado (informe nome, e-mail ou telefone do titular para desbloqueio completo)"
+                    ),
                     "cliente": {
                         "customer_id": ord_row["customer_id"],
                         "nome": ord_row["customer_name"],
-                        "email": ord_row["email"],
-                        "telefone": ord_row["phone"],
+                        "email": ord_row["email"] if is_verified else _mask_email(ord_row["email"]),
+                        "telefone": ord_row["phone"] if is_verified else _mask_phone(ord_row["phone"]),
                         "cidade": ord_row["city"],
                     },
                     "data_pedido": ord_row["order_date"],
@@ -798,13 +841,29 @@ class AgentToolkit:
         cidade: str,
         valor_pedido_brl: float | None = None,
         instrumento_grande_porte: bool = False,
+        categoria_instrumento: str | None = None,
     ) -> dict[str, Any]:
-        """Calcula custos, modalidades e prazos de frete conforme a cidade e o valor do pedido (Seção 5 do Manual)."""
+        """Calcula custos, peso/cubagem estimada, modalidades e prazos de frete conforme cidade e valor (Seção 5)."""
         c_norm = normalize_text(cidade)
         is_cg = any(
             term in c_norm
             for term in ["campo grande", "regiao metropolitana", "terenos", "sidrolandia", "jaraguari"]
         )
+
+        # Estimativa de peso e dimensões padrão por categoria de instrumento
+        cat_norm = normalize_text(categoria_instrumento or "")
+        if instrumento_grande_porte or "bateria" in cat_norm:
+            peso_kg, dimensoes = 28.0, "105x65x60 cm (Grande Porte)"
+        elif "teclado" in cat_norm or "piano" in cat_norm:
+            peso_kg, dimensoes = 11.5, "135x40x22 cm"
+        elif "baixo" in cat_norm:
+            peso_kg, dimensoes = 5.8, "125x45x15 cm"
+        elif "guitarra" in cat_norm:
+            peso_kg, dimensoes = 4.8, "108x42x14 cm"
+        elif "ukulele" in cat_norm:
+            peso_kg, dimensoes = 1.2, "68x26x12 cm"
+        else:
+            peso_kg, dimensoes = 3.2, "106x46x16 cm (Padrão Violão)"
 
         if is_cg:
             frete_gratis = valor_pedido_brl is not None and valor_pedido_brl >= 500.0
@@ -817,6 +876,8 @@ class AgentToolkit:
                 "regiao": "Região Metropolitana de Campo Grande/MS (Seção 5.1)",
                 "cidade_informada": cidade,
                 "valor_pedido_brl": valor_pedido_brl,
+                "peso_estimado_kg": peso_kg,
+                "dimensoes_embalagem": dimensoes,
                 "frete_gratis": frete_gratis,
                 "custo_frete_brl": custo,
                 "prazo_entrega": "1 a 3 dias úteis",
@@ -824,28 +885,51 @@ class AgentToolkit:
                 "seguro_incluso": True,
             }
 
+        # Simulação tarifária regional por peso/cubagem + seguro ad valorem (1,5%) para outras cidades
+        is_ms_interior = any(
+            m in c_norm
+            for m in ["dourados", "tres lagoas", "corumba", "ponta pora", "navirai", "nova andradina", "aquidauana", "maracaju", "paranaiba", "bonito"]
+        )
+        base_pac = 34.90 if is_ms_interior else 58.90
+        base_jadlog = 44.90 if is_ms_interior else 74.90
+        base_sedex = 59.90 if is_ms_interior else 98.90
+
+        seguro_ad_valorem = round((valor_pedido_brl or 600.0) * 0.015, 2)
+        custo_pac = round(base_pac + peso_kg * 3.50 + seguro_ad_valorem, 2)
+        custo_jadlog = round(base_jadlog + peso_kg * 4.20 + seguro_ad_valorem, 2)
+        custo_sedex = round(base_sedex + peso_kg * 5.80 + seguro_ad_valorem, 2)
+
         return {
-            "regiao": "Outras Cidades / Fora da Região Metropolitana de Campo Grande (Seção 5.2)",
+            "regiao": (
+                "Interior de Mato Grosso do Sul (Seção 5.2)"
+                if is_ms_interior
+                else "Outras Cidades / Demais Estados (Seção 5.2)"
+            ),
             "cidade_informada": cidade,
             "valor_pedido_brl": valor_pedido_brl,
-            "calculo_valor": "Calculado automaticamente com base no CEP de destino, peso e dimensões do produto.",
+            "peso_estimado_kg": peso_kg,
+            "dimensoes_embalagem": dimensoes,
+            "calculo_valor": "Calculado com base no CEP/região de destino, peso/cubagem do instrumento e seguro ad valorem (1,5%).",
             "modalidades_disponiveis": [
                 {
-                    "modalidade": "SEDEX (Correios)",
-                    "prazo_estimado": "2 a 5 dias úteis",
+                    "modalidade": "PAC (Correios)",
+                    "prazo_estimado": "5 a 12 dias úteis",
+                    "valor_estimado_brl": custo_pac,
                     "rastreamento": "Sim (formato BR + 9 caracteres + BR)",
                     "seguro": "Incluído contra extravios e danos",
                 },
                 {
                     "modalidade": "Jadlog (.package)",
                     "prazo_estimado": "3 a 8 dias úteis",
+                    "valor_estimado_brl": custo_jadlog,
                     "rastreamento": "Sim",
                     "seguro": "Incluído contra extravios e danos",
                 },
                 {
-                    "modalidade": "PAC (Correios)",
-                    "prazo_estimado": "5 a 12 dias úteis",
-                    "rastreamento": "Sim",
+                    "modalidade": "SEDEX (Correios)",
+                    "prazo_estimado": "2 a 5 dias úteis",
+                    "valor_estimado_brl": custo_sedex,
+                    "rastreamento": "Sim (formato BR + 9 caracteres + BR)",
                     "seguro": "Incluído contra extravios e danos",
                 },
             ],
@@ -856,6 +940,154 @@ class AgentToolkit:
                 else "Nota: Baterias acústicas, pianos digitais e contrabaixos podem exigir cotação individual de frete."
             ),
             "orientacao_avaria": "Em caso de avaria no transporte, o cliente deve recusar o recebimento e contatar imediatamente a loja (Seção 5.2).",
+        }
+
+    def registrar_solicitacao_troca_devolucao(
+        self,
+        order_id: int | str,
+        tipo_solicitacao: str,
+        motivo: str,
+        verificacao_cliente: str | None = None,
+    ) -> dict[str, Any]:
+        """Registra solicitação formal de devolução/troca no banco e emite autorização de logística reversa (Seção 4)."""
+        consulta = self.consultar_pedido(str(order_id), verificacao_cliente=verificacao_cliente)
+        if not consulta.get("encontrado"):
+            return {
+                "sucesso": False,
+                "mensagem": f"Pedido #{order_id} não encontrado para abertura de solicitação.",
+            }
+
+        ped = consulta["pedidos"][0]
+        oid = int(ped["order_id"])
+        st = ped["status_codigo"]
+        tipo_norm = normalize_text(tipo_solicitacao)
+
+        if st != "delivered":
+            return {
+                "sucesso": False,
+                "order_id": oid,
+                "status_pedido": ped["status_descricao"],
+                "mensagem": (
+                    f"O pedido #{oid} está com status '{ped['status_descricao']}'. "
+                    "A logística reversa de troca/devolução aplica-se a pedidos já entregues."
+                ),
+            }
+
+        analise = ped["analise_troca_e_devolucao"]
+        if "defeito" in tipo_norm or "garantia" in tipo_norm:
+            elegivel = bool(
+                analise.get("troca_por_defeito_30_dias_loja", {}).get("elegivel_na_data_referencia")
+                or analise.get("garantia_legal_90_dias_cdc", {}).get("elegivel_na_data_referencia")
+            )
+            categoria_fluxo = "troca_por_defeito"
+        elif "preferencia" in tipo_norm:
+            elegivel = bool(
+                analise.get("direito_arrependimento_7_dias", {}).get("elegivel_na_data_referencia")
+            )
+            categoria_fluxo = "troca_por_preferencia"
+        else:
+            elegivel = bool(
+                analise.get("direito_arrependimento_7_dias", {}).get("elegivel_na_data_referencia")
+            )
+            categoria_fluxo = "devolucao_arrependimento"
+
+        if not elegivel:
+            return {
+                "sucesso": False,
+                "order_id": oid,
+                "tipo_solicitacao": categoria_fluxo,
+                "elegivel": False,
+                "mensagem": (
+                    f"O pedido #{oid} (entregue em {ped['previsao_ou_data_entrega']}) encontra-se fora do prazo "
+                    f"automático para '{categoria_fluxo}' na data de referência ({self.reference_date.isoformat()}). "
+                    "Caso deseje avaliação de exceção pela gerência, podemos abrir um chamado de atendimento."
+                ),
+            }
+
+        protocolo = f"TROCA-{self.reference_date.year}-{oid:04d}"
+        codigo_reverso = f"LOG-REV-BR{oid:04d}EMP26BR"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        self.db.execute_write(
+            """
+            INSERT OR REPLACE INTO return_requests
+            (protocol, order_id, customer_name, request_type, reason, status, reverse_shipping_code, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                protocolo,
+                oid,
+                ped["cliente"]["nome"],
+                categoria_fluxo,
+                motivo,
+                "aguardando_postagem_reversa",
+                codigo_reverso,
+                now_iso,
+            ),
+        )
+
+        return {
+            "sucesso": True,
+            "protocolo": protocolo,
+            "order_id": oid,
+            "cliente": ped["cliente"]["nome"],
+            "tipo_solicitacao": categoria_fluxo,
+            "status_solicitacao": "Aprovada — Aguardando Postagem (Logística Reversa)",
+            "codigo_autorizacao_postagem_reversa": codigo_reverso,
+            "frete_devolucao": (
+                "Gratuito (por conta da Empório da Música — Seção 4.1/4.2)"
+                if categoria_fluxo != "troca_por_preferencia"
+                else "Conforme Seção 4.3 (eventuais diferenças de valor serão ajustadas)"
+            ),
+            "prazo_reembolso_ou_troca": "Reembolso em até 10 dias úteis na mesma forma de pagamento original após recebimento e conferência (Seção 4.1).",
+            "instrucoes_cliente": (
+                "Leve o instrumento na embalagem original, sem sinais de uso e com todos os manuais/acessórios "
+                f"até uma agência dos Correios apresentando o código de postagem reversa {codigo_reverso}."
+            ),
+        }
+
+    def abrir_chamado_reclamacao(
+        self,
+        identificador_cliente: str,
+        descricao_reclamacao: str,
+        order_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Registra reclamação formal do cliente e encaminha ao responsável com SLA de 24h úteis (Seção 7.3)."""
+        existing = self.db.execute_query("SELECT COUNT(*) AS cnt FROM complaint_tickets")
+        seq = int(existing[0]["cnt"]) + 1 if existing else 1
+        protocolo = f"SAC-{self.reference_date.year}-{seq:04d}"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        self.db.execute_write(
+            """
+            INSERT INTO complaint_tickets
+            (protocol, customer_identifier, order_id, description, assigned_to, sla_hours, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                protocolo,
+                identificador_cliente,
+                order_id,
+                descricao_reclamacao,
+                "Gerência de Atendimento — Empório da Música",
+                24,
+                "aberto_encaminhado_gerencia",
+                now_iso,
+            ),
+        )
+
+        return {
+            "sucesso": True,
+            "protocolo": protocolo,
+            "cliente": identificador_cliente,
+            "order_id": order_id,
+            "encaminhado_para": "Gerência de Atendimento / Responsável (Seção 7.3 e Seção 10)",
+            "prazo_retorno_sla": "Até 24 horas úteis (Seção 7.3 do Manual)",
+            "status": "Registrado e escalado com prioridade",
+            "mensagem": (
+                f"Reclamação registrada sob o protocolo {protocolo} e encaminhada diretamente ao responsável. "
+                "Nossa equipe retornará o contato em até 24 horas úteis."
+            ),
         }
 
     def consultar_politicas_loja(self, pergunta: str) -> dict[str, Any]:
@@ -967,7 +1199,11 @@ class AgentToolkit:
                             "identificador": {
                                 "type": "string",
                                 "description": "Número do pedido (ex.: '7', '19'), nome do cliente (ex.: 'Letícia Gonçalves', 'Pedro Oliveira'), e-mail, telefone ou código de rastreio.",
-                            }
+                            },
+                            "verificacao_cliente": {
+                                "type": "string",
+                                "description": "Segundo fator de verificação LGPD (nome do titular, e-mail ou telefone) quando a consulta é feita pelo número do pedido.",
+                            },
                         },
                         "required": ["identificador"],
                     },
@@ -977,7 +1213,7 @@ class AgentToolkit:
                 "type": "function",
                 "function": {
                     "name": "calcular_frete_e_entrega",
-                    "description": "Consulta valor de frete, modalidades de envio (Motoboy, PAC, SEDEX, Jadlog) e prazo de entrega para uma cidade.",
+                    "description": "Consulta valor de frete, peso/dimensões, modalidades de envio (Motoboy, PAC, SEDEX, Jadlog) e prazo de entrega para uma cidade.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -987,14 +1223,78 @@ class AgentToolkit:
                             },
                             "valor_pedido_brl": {
                                 "type": "number",
-                                "description": "Valor do pedido em R$ para verificar elegibilidade a frete grátis em Campo Grande (acima de R$ 500).",
+                                "description": "Valor do pedido em R$ para verificar frete grátis em Campo Grande (acima de R$ 500) e cálculo de seguro.",
                             },
                             "instrumento_grande_porte": {
                                 "type": "boolean",
                                 "description": "True se for bateria acústica, piano digital ou contrabaixo.",
                             },
+                            "categoria_instrumento": {
+                                "type": "string",
+                                "description": "Categoria para estimativa de peso e cubagem ('Violões', 'Ukuleles', 'Guitarras', 'Baixos', 'Baterias', 'Teclados').",
+                            },
                         },
                         "required": ["cidade"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "registrar_solicitacao_troca_devolucao",
+                    "description": (
+                        "Registra formalmente no sistema uma solicitação de devolução por arrependimento (7 dias) "
+                        "ou troca por defeito/preferência, gerando protocolo e código de logística reversa gratuita."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "order_id": {
+                                "type": "integer",
+                                "description": "Número do pedido entregue (ex.: 7).",
+                            },
+                            "tipo_solicitacao": {
+                                "type": "string",
+                                "enum": ["devolucao_arrependimento", "troca_por_defeito", "troca_por_preferencia"],
+                                "description": "Tipo da solicitação conforme Seção 4 do Manual.",
+                            },
+                            "motivo": {
+                                "type": "string",
+                                "description": "Motivo informado pelo cliente.",
+                            },
+                            "verificacao_cliente": {
+                                "type": "string",
+                                "description": "Nome, e-mail ou telefone do cliente titular para validação LGPD.",
+                            },
+                        },
+                        "required": ["order_id", "tipo_solicitacao", "motivo"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "abrir_chamado_reclamacao",
+                    "description": (
+                        "Registra uma reclamação formal (SAC/Ouvidoria) e encaminha para a gerência com SLA de retorno de 24 horas úteis (Seção 7.3)."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "identificador_cliente": {
+                                "type": "string",
+                                "description": "Nome, e-mail ou telefone do cliente.",
+                            },
+                            "descricao_reclamacao": {
+                                "type": "string",
+                                "description": "Descrição detalhada da reclamação ou problema ocorrido.",
+                            },
+                            "order_id": {
+                                "type": "integer",
+                                "description": "Número do pedido relacionado, se houver.",
+                            },
+                        },
+                        "required": ["identificador_cliente", "descricao_reclamacao"],
                     },
                 },
             },
@@ -1030,6 +1330,8 @@ class AgentToolkit:
             "listar_promocoes": self.listar_promocoes,
             "consultar_pedido": self.consultar_pedido,
             "calcular_frete_e_entrega": self.calcular_frete_e_entrega,
+            "registrar_solicitacao_troca_devolucao": self.registrar_solicitacao_troca_devolucao,
+            "abrir_chamado_reclamacao": self.abrir_chamado_reclamacao,
             "consultar_politicas_loja": self.consultar_politicas_loja,
         }
         if tool_name not in fn_map:

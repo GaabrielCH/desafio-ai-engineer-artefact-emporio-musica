@@ -229,11 +229,50 @@ class StoreDatabase:
         products_df.to_sql("products", self.conn, index=False, if_exists="replace")
         promotions_df.to_sql("promotions", self.conn, index=False, if_exists="replace")
 
+        # 6. Tabelas operacionais de escrita para logística reversa e chamados de reclamação/handoff
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS return_requests (
+                protocol TEXT PRIMARY KEY,
+                order_id INTEGER NOT NULL,
+                customer_name TEXT NOT NULL,
+                request_type TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL,
+                reverse_shipping_code TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS complaint_tickets (
+                protocol TEXT PRIMARY KEY,
+                customer_identifier TEXT NOT NULL,
+                order_id INTEGER,
+                description TEXT NOT NULL,
+                assigned_to TEXT NOT NULL,
+                sla_hours INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        self.conn.commit()
+
     def execute_query(self, sql: str, params: tuple[Any, ...] | list[Any] = ()) -> list[dict[str, Any]]:
         """Executa uma query SQL read-only e retorna lista de dicionários."""
         cur = self.conn.cursor()
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
+
+    def execute_write(self, sql: str, params: tuple[Any, ...] | list[Any] = ()) -> int:
+        """Executa comando SQL de escrita (INSERT/UPDATE) e retorna rowcount."""
+        cur = self.conn.cursor()
+        cur.execute(sql, params)
+        self.conn.commit()
+        return cur.rowcount
 
 
 # Singleton default para reutilização rápida
