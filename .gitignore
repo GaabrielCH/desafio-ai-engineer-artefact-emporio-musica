@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Local databases & cache
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.ruff_cache/
+
+# Original unpacked archive subfolder (data is already in ./data)
+Desafio Técnico AI Engineer 2026/
+Desafio*/
+
+# OS files
+.DS_Store
+Thumbs.db
