@@ -88,6 +88,7 @@ def calcular_opcoes_pagamento(
             )
 
     valor_max_parcela = round(preco_vigente / max_parcelas, 2)
+    valor_max_str = f"{valor_max_parcela:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
     permite_combinacao = preco_vigente > 2000.0
 
     return {
@@ -101,7 +102,7 @@ def calcular_opcoes_pagamento(
         "cartao_debito_brl": preco_vigente,
         "boleto_bancario_brl": preco_vigente,
         "max_parcelas_sem_juros": max_parcelas,
-        "resumo_max_parcelamento": f"Até {max_parcelas}x de R$ {valor_max_parcela:.2f} sem juros no cartão de crédito",
+        "resumo_max_parcelamento": f"Até {max_parcelas}x de R$ {valor_max_str} sem juros no cartão de crédito",
         "permite_combinar_pagamentos": permite_combinacao,
         "regra_combinacao": (
             "Permitida combinação de formas de pagamento (ex.: PIX + cartão) pois o valor supera R$ 2.000,00 (Seção 3.1)."

@@ -317,7 +317,7 @@ class EmporioMusicaAgent:
         greeting_prefix = f"Olá, {customer_first_name}! Tudo bem? 🎸\n\n" if customer_first_name else "Olá! Tudo bem? Bem-vindo(a) à **Empório da Música**! 🎸\n\n"
         if history:
             # Em turnos seguintes da mesma conversa, usar transição natural sem repetir "Bem-vindo"
-            greeting_prefix = f"Claro, {customer_first_name}! " if customer_first_name else ""
+            greeting_prefix = f"Claro, {customer_first_name}!\n\n" if customer_first_name else ""
 
         # 1. Guardrail: Perguntas totalmente fora do escopo da loja (Off-topic)
         if self._is_off_topic(q_norm):
@@ -409,7 +409,7 @@ class EmporioMusicaAgent:
             sections_reply.append(self._format_product_detail_response(prod_detail, q_norm))
 
         # 5. Intenção: Busca de Catálogo com Filtros (ex.: "Quais opções de violões disponíveis custando até R$1000?")
-        catalog_filters = self._extract_catalog_search_filters(q_norm)
+        catalog_filters = self._extract_catalog_search_filters(q_norm) if not matched_acc else None
         if catalog_filters and not specific_models:
             search_res = call_tool("buscar_produtos", catalog_filters)
             sections_reply.append(self._format_catalog_search_response(search_res, catalog_filters))
@@ -821,9 +821,10 @@ class EmporioMusicaAgent:
         pgto = detail["condicoes_pagamento"]
         specs = detail.get("especificacoes", {})
 
-        preco_tab = f"R$ {pgto['preco_tabela_brl']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        preco_vig = f"R$ {pgto['preco_vigente_brl']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        preco_pix = f"R$ {pgto['preco_pix_brl']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        preco_tab = f"R$ {pgto['preco_tabela_brl']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        preco_vig = f"R$ {pgto['preco_vigente_brl']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        preco_pix = f"R$ {pgto['preco_pix_brl']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        econ_pix = f"R$ {pgto['economia_pix_brl']:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
         lines: list[str] = [f"### 🎵 {nome} (`ID #{detail['product_id']}`)"]
         lines.append(f"- **Categoria:** {detail['categoria']}")
@@ -861,8 +862,8 @@ class EmporioMusicaAgent:
             lines.append(
                 f"\n#### 💰 Preço e Condições de Pagamento\n"
                 f"- **Preço de Tabela:** **{preco_tab}**\n"
-                f"- **À vista no PIX (5% de desconto):** **{preco_pix}** *(economia de R$ {pgto['economia_pix_brl']:,.2f})*\n".replace(",", "X").replace(".", ",").replace("X", ".")
-                + f"- **Cartão de Débito ou Boleto Bancário:** {preco_vig} à vista"
+                f"- **À vista no PIX (5% de desconto):** **{preco_pix}** *(economia de {econ_pix})*\n"
+                f"- **Cartão de Débito ou Boleto Bancário:** {preco_vig} à vista"
             )
             if detail.get("promocoes_expiradas"):
                 exp_list = ", ".join(
